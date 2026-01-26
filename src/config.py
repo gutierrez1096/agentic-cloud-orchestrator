@@ -7,7 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 load_dotenv()
 
 
-def get_model(model_name: str = "gpt-4.1", timeout: int = 60):
+def get_model(model_name: str = "gpt-4.1-nano", timeout: int = 60):
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:

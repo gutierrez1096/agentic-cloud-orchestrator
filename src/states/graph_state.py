@@ -1,10 +1,12 @@
-from typing import TypedDict, Annotated
+from typing import Annotated, TypedDict, List
 from langgraph.graph.message import add_messages
+from langchain_core.messages import BaseMessage
 
-class SupervisorState(TypedDict):
-    messages: Annotated[list, add_messages]
-    is_valid: bool
-    coordination_notes: list
-    architecture_plan: str
-    iac_code: str
-    next_node: str
+class AgentState(TypedDict):
+    messages: Annotated[List[BaseMessage], add_messages]
+    terraform_code: str
+    tfvars_data: dict
+    plan_output: str
+    next_step: str
+    is_approved: bool
+    errors: List[str]

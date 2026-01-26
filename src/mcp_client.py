@@ -1,45 +1,34 @@
-import asyncio
-from typing import Dict, List
-
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_core.tools import BaseTool
+import logging
+import asyncio
+logger = logging.getLogger(__name__)
 
-
-def _build_multi_server_client() -> MultiServerMCPClient:
-    config: Dict[str, dict] = {
-        "awslabs.aws-documentation-mcp-server": {
-            "transport": "streamable_http",
-            "url": "https://knowledge-mcp.global.api.aws",
-        },
-        "aws_documentation": {
-            "transport": "stdio",
-            "command": "uvx",
-            "args": ["awslabs.aws-documentation-mcp-server@latest"],
-            "env": {"AWS_REGION": "eu-central-1"},
-        },
+MCP_CONFIG = {
+    "aws-terraform": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["awslabs.terraform-mcp-server@latest"],
+        "env": {"AWS_REGION": "eu-central-1"}
+    },
+    "aws-pricing": {
+        "transport": "stdio",
+        "command": "uvx",
+        "args": ["awslabs.aws-pricing-mcp-server@latest"],
+        "env": {"AWS_REGION": "eu-central-1"}
     }
+}
 
-    return MultiServerMCPClient(config)
+# Split clients to allow filtering by server
+pricing_client = MultiServerMCPClient({"aws-pricing": MCP_CONFIG["aws-pricing"]})
+terraform_client = MultiServerMCPClient({"aws-terraform": MCP_CONFIG["aws-terraform"]})
 
+for tool in asyncio.run(pricing_client.get_tools()):
+    logger.info(f"Pricing Tool: {tool.name}")
+for tool in asyncio.run(terraform_client.get_tools()):
+    logger.info(f"Terraform Tool: {tool.name}")
 
-async def get_all_tools(client: MultiServerMCPClient) -> List[BaseTool]:
-    return await client.get_tools()
+async def get_architect_tools():
+    return await pricing_client.get_tools()
 
-
-def _filter_aws_doc_tools(tools: List[BaseTool]) -> List[BaseTool]:
-    allowed = {
-        "aws___search_documentation",
-        "aws___read_documentation",
-        "aws___recommend",
-    }
-    return [t for t in tools if t.name in allowed]
-
-
-def get_filtered_aws_doc_tools() -> List[BaseTool]:
-    """
-    Obtiene y filtra las herramientas de documentación AWS permitidas.
-    Esta es la función principal que debería usarse para obtener las herramientas filtradas.
-    """
-    client = _build_multi_server_client()
-    all_tools = asyncio.run(get_all_tools(client))
-    return _filter_aws_doc_tools(all_tools)
+async def get_devops_tools():
+    return await terraform_client.get_tools()
