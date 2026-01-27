@@ -63,3 +63,7 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+infra_workspace/
+
+localstack/

@@ -5,67 +5,68 @@ Multi-agent orchestrator for autonomous cloud infrastructure deployment using La
 
 ## 1. Objetivo del Sistema
 
-El objetivo principal es desarrollar un **Orquestador Multi-Agente Inteligente** capaz de transformar requerimientos de infraestructura en lenguaje natural en despliegues reales, seguros y validados en **AWS**.
+Desarrollar un **Orquestador Multi-Agente de grado empresarial** que actúe como una capa de abstracción inteligente entre los requerimientos de negocio y la infraestructura de AWS. El sistema no es un simple generador de código, sino un ecosistema autónomo basado en:
 
-A diferencia de un script de automatización tradicional, este sistema busca:
-
-* **Abstracción Semántica:** Que el usuario no necesite conocer la sintaxis de Terraform, solo el objetivo de negocio.
-* **Resiliencia Autónoma (Self-healing):** Capacidad de detectar fallos en la fase de `plan` o `validate` y corregirlos mediante razonamiento antes de la intervención humana.
-* **Gobernanza mediante MCP:** Utilizar el **Model Context Protocol** como estándar de desacoplamiento entre la lógica del modelo y la ejecución técnica en la nube.
+* **Abstracción Semántica:** Interfaz puramente en lenguaje natural para la definición de recursos.
+* **Resiliencia Autónoma (Self-healing):** Ciclos de retroalimentación en tiempo real para corregir errores de plan y validación sin intervención manual.
+* **Gobernanza mediante MCP:** Desacoplamiento total de las credenciales y la lógica de ejecución mediante el estándar **Model Context Protocol**, garantizando que el LLM solo interactúe con interfaces seguras y tipadas.
 
 ---
 
-## 2. Los Agentes (Especialistas Funcionales)
+## 2. Arquitectura de Agentes y Nodos
 
-Para cumplir con el requisito multi-agente, dividiremos las responsabilidades en roles especializados que interactúan sobre un estado compartido.
+En este sistema, diferenciamos entre agentes que **razonan** (LLM-based) y nodos que **ejecutan** (deterministic code/MCP).
 
-| Agente | Entrada | Acción Principal | Salida |
-| :--- | :--- | :--- | :--- |
-| **Supervisor** | Petición Usuario | Orquestación y Gestión de Estado | Delegación a Agentes |
-| **Architect** | Petición Natural | Seleccionar Módulo y Región | HCL Template |
-| **DevOps** | HCL Template | Generar .tfvars y escribir archivos | Workspace listo |
-| **Executor** | Filesystem | terraform plan vía MCP | Plan o Error |
-| **SRE** | HCL + Error | Diagnosticar y corregir | HCL Corregido |
-| **Applier** | Aprobación | terraform apply final | Infra Real |
+### A. Capa de Razonamiento (Agentes)
+
+| Agente | Responsabilidad | Entrada | Salida |
+| --- | --- | --- | --- |
+| **Supervisor** | Gestión del ciclo de vida y ruteo de estados. | Prompt Usuario / Estado | Delegación al siguiente nodo |
+| **Cloud Architect** | Diseño de arquitectura HCL y selección de módulos. | Requerimientos | Código Terraform (HCL) |
+| **SecOps Guardian** | Auditoría de seguridad y cumplimiento (Compliance). | Código HCL | Reporte de Riesgos |
+| **IaC Debugger** | Análisis de errores y generación de parches. | Error Logs (MCP) | Instrucciones de corrección |
+
+### B. Capa de Acción y Control (Nodos)
+
+| Nodo | Función Técnica | Herramienta / Protocolo |
+| --- | --- | --- |
+| **MCP Provisioner** | Ejecución determinista de Terraform (`plan`/`apply`). | **Terraform MCP Server** |
+| **HITL Gate** | Punto de interrupción para aprobación humana. | **LangGraph Breakpoint** |
+| **State Sync** | Persistencia y sincronización del estado del grafo. |  |
 
 ---
 
-## 3. El Sistema Agéntico (Arquitectura del Grafo)
+## 3. El Sistema Agéntico (Diseño del Grafo)
 
-El sistema se define como un **Grafo de Estados Cíclico Dirigido** implementado en **LangGraph**. Los pilares de este sistema son:
+El orquestador utiliza **LangGraph** para implementar un **Grafo de Estados Cíclico Dirigido (DAG con ciclos)**, permitiendo la iteración hasta alcanzar el estado deseado.
 
 ### A. El Estado Compartido (`State`)
 
-Es la "fuente única de verdad". Contiene:
+La "fuente única de verdad" es un objeto `TypedDict` que persiste:
 
-* El historial de la conversación.
-* El código HCL y variables generadas.
-* El **Plan de Ejecución** devuelto por Terraform.
-* Un marcador de aprobación humana.
+* **HCL_Code:** El código generado actualmente.
+* **Plan_Output:** El resultado del último `terraform plan`.
+* **Compliance_Report:** El output del agente de seguridad.
+* **Is_Approved:** Flag booleano gestionado por el nodo HITL.
 
-### B. El Ciclo de Control (Feedback Loop)
+### B. Ciclo de Autocorrección (Feedback Loop)
 
-Basado en patrones de diseño de sistemas autónomos, el sistema no avanza linealmente. Si el nodo de **Ejecución (MCP)** detecta un error de sintaxis o de políticas de AWS, el flujo retrocede al **Diagnosticador**, creando un bucle de corrección hasta que el estado sea válido.
+Si el **MCP Provisioner** falla durante el `plan`, el **Orchestrator** redirige el flujo al **SRE Diagnostic**. Este agente analiza el error y actualiza el contexto para el **Architect**, quien regenera el HCL corregido, iniciando un nuevo ciclo de validación.
 
-### C. Human-in-the-Loop (HITL)
+### C. Seguridad y Gobernanza (MCP)
 
-El sistema integra una **interrupción física** (breakpoint). El grafo se pausa tras generar el `terraform plan`.
+El sistema utiliza servidores MCP para abstraer la complejidad del entorno:
 
-* **Justificación Académica:** En un entorno de infraestructura, la autonomía total sin supervisión es un riesgo crítico. El TFG demuestra cómo la IA puede asistir al humano sin reemplazar el juicio final de seguridad.
-
-### D. Integración MCP (La Capa de Abstracción)
-
-El orquestador no "lanza" procesos de shell directamente. Utiliza el **AWS Terraform MCP Server** para:
-
-* Consultar esquemas de recursos.
-* Ejecutar validaciones estáticas (Checkov).
-* Realizar el despliegue final.
+* **Encapsulamiento:** El LLM nunca ve las variables de entorno de AWS.
+* **Validación Estática:** El **SecOps Guardian** invoca herramientas como *Checkov* o *TFSec* a través de herramientas MCP antes de permitir el paso al provisionador.
 
 ---
 
-## Posibles MCP Servers
+## 4. Servidores MCP Utilizados
 
-MCP Server para Terraform
-MCP Server para AWS
-MCP Server para Gobernanza
-MCP Server para Git
+Para la implementación se requieren los siguientes conectores:
+
+1. **Terraform MCP Server:** Gestión de binarios, inicialización de workspaces y ejecución de comandos.
+2. **AWS SDK MCP Server:** Discovery de recursos existentes y validación de cuotas en tiempo real.
+3. **Governance MCP Server:** Interfaz con motores de políticas (OPA/Rego) para auditoría de seguridad.
+4. **Filesystem MCP Server:** Manejo seguro de archivos temporales y persistencia de estados locales.
