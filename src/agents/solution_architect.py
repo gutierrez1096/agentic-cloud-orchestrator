@@ -1,13 +1,13 @@
 import json
-from typing import Dict, List, Optional, Literal
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
-from src.states.graph_state import AgentState
+import logging
+
+from langchain_core.messages import SystemMessage
+
 from src.config import get_model
-from src.mcp_client import get_solution_architect_tools
 from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
 from src.schemas.architect_schemas import TerraformDesign
-
-import logging
+from src.states.graph_state import AgentState
+from src.tools.mcp_tools import get_solution_architect_tools
 logger = logging.getLogger(__name__)
 
 async def solution_architect_node(state: AgentState):

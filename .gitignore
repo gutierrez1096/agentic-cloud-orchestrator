@@ -64,6 +64,6 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
-infra_workspace/
+infra_workspace/*
 
 localstack/

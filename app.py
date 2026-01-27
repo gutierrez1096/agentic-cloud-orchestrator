@@ -10,6 +10,7 @@ from htbuilder import div, styles
 from htbuilder.units import rem
 import datetime
 import textwrap
+import json
 
 load_dotenv()
 logger = setup_logger()
@@ -146,15 +147,40 @@ if user_message:
                         if content:
                             st.markdown(content)
                     
+                    rationale = final_state.get("architect_rationale", "")
+                    if rationale:
+                        with st.expander("📋 Rationale del Architect", expanded=False):
+                            st.markdown(rationale)
+                    
+                    created_files = final_state.get("created_files", [])
+                    if created_files:
+                        with st.expander("📁 Archivos Creados", expanded=False):
+                            for filename in created_files:
+                                st.text(f"• {filename}")
+                    
                     tf_code = final_state.get("terraform_code", "")
                     if tf_code:
-                        st.subheader("🛠️ Terraform Code")
-                        st.code(tf_code, language="hcl")
-                        code_block = f"### 🛠️ Terraform Code\n```hcl\n{tf_code}\n```"
+                        with st.expander("🛠️ Código Terraform", expanded=False):
+                            try:
+                                files_dict = json.loads(tf_code)
+                                if isinstance(files_dict, dict):
+                                    for filename, file_content in files_dict.items():
+                                        st.subheader(f"`{filename}`")
+                                        st.code(file_content, language="hcl")
+                                else:
+                                    st.code(tf_code, language="hcl")
+                            except json.JSONDecodeError:
+                                st.code(tf_code, language="hcl")
+                    
+                    plan_output = final_state.get("plan_output", "")
+                    if plan_output:
+                        st.subheader("📊 Terraform Plan Output")
+                        st.code(plan_output, language="text")
+                        plan_block = f"### 📊 Terraform Plan Output\n```\n{plan_output}\n```"
                         if content:
-                            content = f"{content}\n\n{code_block}"
+                            content = f"{content}\n\n{plan_block}"
                         else:
-                            content = code_block
+                            content = plan_block
 
                     if content:
                         st.session_state.messages.append({"role": "assistant", "content": content})

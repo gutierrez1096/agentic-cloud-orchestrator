@@ -1,20 +1,14 @@
-from pydantic import BaseModel, Field, validator
-from typing import List
+from typing import List, Dict
+
+from pydantic import BaseModel, Field
 
 class TerraformDesign(BaseModel):
     """
-    Call this tool ONLY when you have a complete, secure, and validated Terraform design.
-    This signals the end of the architecture phase.
+    Representa un diseño completo de Terraform listo para revisión.
+    
+    El hcl_code debe ser un objeto JSON donde las claves son nombres de archivos
+    y los valores son el contenido HCL.
     """
-    rationale: str = Field(
-        ..., 
-        description="Explanation of module choices, cost trade-offs, and architectural decisions."
-    )
-    hcl_code: str = Field(
-        ..., 
-        description="The final, valid Terraform HCL code block."
-    )
-    required_providers: List[str] = Field(
-        default=["hashicorp/aws"], 
-        description="List of required providers."
-    )
+    rationale: str = Field(..., description="Justificación de decisiones arquitectónicas y trade-offs.")
+    hcl_code: str = Field(..., description="JSON con archivos Terraform. Claves: nombres de archivo, valores: contenido HCL.")
+    required_providers: List[str] = Field(default=["hashicorp/aws"], description="Lista de providers requeridos.")

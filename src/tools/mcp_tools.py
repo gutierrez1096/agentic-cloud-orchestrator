@@ -32,4 +32,11 @@ for tool in asyncio.run(terraform_client.get_tools()):
     logger.debug(f"Terraform Tool: {tool.name}")
 
 async def get_solution_architect_tools():
-    return await pricing_client.get_tools()
+    pricing_tools = await pricing_client.get_tools()
+    terraform_tools = await terraform_client.get_tools()
+    return pricing_tools + terraform_tools
+
+async def get_secops_guardian_tools():
+    pricing_tools = await pricing_client.get_tools()
+    terraform_tools = await terraform_client.get_tools()
+    return pricing_tools + terraform_tools
