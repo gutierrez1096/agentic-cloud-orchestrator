@@ -1,5 +1,6 @@
+import json
 import logging
-
+from typing import List, Any
 from langchain_core.messages import SystemMessage
 
 from src.config import get_model
@@ -10,36 +11,29 @@ from src.tools.mcp_tools import get_secops_guardian_tools
 
 logger = logging.getLogger(__name__)
 
-async def secops_guardian_node(state: AgentState):
+async def secops_guardian_node(state: AgentState, tools: List[Any]):
     logger.info("--- SECOPS GUARDIAN: AUDITING CODE ---")
     
-    tf_code = state.get("terraform_code")
+    tf_code = state.get("terraform_code", {})
     
     if not tf_code:
         return {"errors": ["No terraform code found to audit"]}
-
+        
     llm = get_model()
-    mcp_tools = await get_secops_guardian_tools()
-    llm_with_tool = llm.bind_tools(mcp_tools).with_structured_output(SecurityReview)
+    llm_with_tools = llm.bind_tools(tools + [SecurityReview])
     
-    messages = [
-        SystemMessage(content=SECOPS_SYSTEM_PROMPT),
-        {"role": "user", "content": f"Analyze this HCL for security violations:\n\n{tf_code}"}
-    ]
+    messages = state["messages"]
     
-    review: SecurityReview = await llm_with_tool.ainvoke(messages)
+    if not any(isinstance(m, SystemMessage) for m in messages):
+        messages = [SystemMessage(content=SECOPS_SYSTEM_PROMPT)] + messages
     
-    logger.info(f"SecOps Verdict: {'APPROVED' if review.is_approved else 'REJECTED'}")
+    response = await llm_with_tools.ainvoke(messages)
     
-    if not review.is_approved:
-        feedback_msg = f"Security Rejection: {review.risk_analysis}. Fix these: {review.required_changes}"
-        return {
-            "is_approved": False, 
-            "messages": [{"role": "user", "content": feedback_msg}],
-            "errors": review.required_changes
-        }
+    if response.tool_calls:
+        logger.info(f"SecOps selected {len(response.tool_calls)} tool(s)")
+        for tool in response.tool_calls:
+            logger.info(f"Tool Request: {tool['name']} | Arguments: {json.dumps(tool['args'])}")
+    else:
+        logger.info("SecOps generated direct response")
     
-    return {
-        "is_approved": True, 
-        "errors": []
-    }
+    return {"messages": [response]}

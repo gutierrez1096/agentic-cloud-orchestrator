@@ -10,5 +10,8 @@ class TerraformDesign(BaseModel):
     y los valores son el contenido HCL.
     """
     rationale: str = Field(..., description="Justificación de decisiones arquitectónicas y trade-offs.")
-    hcl_code: str = Field(..., description="JSON con archivos Terraform. Claves: nombres de archivo, valores: contenido HCL.")
+    hcl_code: Dict[str, str] = Field(
+        ..., 
+        description="Diccionario de archivos Terraform. Las claves son nombres de archivo (ej: 'main.tf', 'variables.tf', 'outputs.tf') y los valores son el contenido HCL de cada archivo."
+    )
     required_providers: List[str] = Field(default=["hashicorp/aws"], description="Lista de providers requeridos.")

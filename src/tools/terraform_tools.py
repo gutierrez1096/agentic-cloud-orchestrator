@@ -3,14 +3,20 @@ import subprocess
 import logging
 from langchain_core.tools import tool
 
+from src.config import INFRA_WORKSPACE, PROTECTED_TERRAFORM_FILES
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_WORKSPACE = "./infra_workspace"
+DEFAULT_WORKSPACE = INFRA_WORKSPACE
 
 
 @tool
 def write_terraform_file(content: str, filename: str = "main.tf") -> str:
     """Writes Terraform HCL code to the infrastructure workspace."""
+    if filename in PROTECTED_TERRAFORM_FILES:
+        logger.warning(f"Attempted to write to protected file: {filename}")
+        return f"Error: '{filename}' is a protected file and cannot be modified. This file contains critical infrastructure configuration."
+    
     os.makedirs(DEFAULT_WORKSPACE, exist_ok=True)
     file_path = os.path.join(DEFAULT_WORKSPACE, filename)
     with open(file_path, "w", encoding="utf-8") as f:

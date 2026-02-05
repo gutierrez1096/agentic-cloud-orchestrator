@@ -1,22 +1,20 @@
 import json
 import logging
-
+from typing import List, Any
 from langchain_core.messages import SystemMessage
 
 from src.config import get_model
 from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
 from src.schemas.architect_schemas import TerraformDesign
 from src.states.graph_state import AgentState
-from src.tools.mcp_tools import get_solution_architect_tools
+
 logger = logging.getLogger(__name__)
 
-async def solution_architect_node(state: AgentState):
+async def solution_architect_node(state: AgentState, tools: List[Any]):
     logger.info("--- SOLUTION ARCHITECT: THINKING ---")
     
     llm = get_model()
-    mcp_tools = await get_solution_architect_tools()
-    
-    llm_with_tools = llm.bind_tools(mcp_tools + [TerraformDesign])
+    llm_with_tools = llm.bind_tools(tools + [TerraformDesign])
     
     messages = state["messages"]
 
