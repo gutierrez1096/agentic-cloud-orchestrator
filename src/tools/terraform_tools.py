@@ -1,5 +1,7 @@
 import os
+import sys
 import subprocess
+import shutil
 import logging
 from langchain_core.tools import tool
 
@@ -9,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_WORKSPACE = INFRA_WORKSPACE
 
+CHECKOV_PATH = shutil.which("checkov", path=os.path.dirname(sys.executable)) or shutil.which("checkov")
+
+TERRAFORM_PATH = shutil.which("tflocal", path=os.path.dirname(sys.executable)) or shutil.which("tflocal")
 
 @tool
 def write_terraform_file(content: str, filename: str = "main.tf") -> str:
@@ -48,3 +53,28 @@ def execute_terraform_command(command: str, working_directory: str = DEFAULT_WOR
         return f"Terraform command execution ({status}):\n{output}"
     except Exception as e:
         return f"Error: {str(e)}"
+
+
+@tool(
+    "RunCheckovScan"
+)
+def run_checkov_scan(directory: str = INFRA_WORKSPACE, framework: str = "terraform") -> str:
+    """Run Checkov security scan on Terraform code to identify vulnerabilities and misconfigurations."""
+    
+    if not os.path.exists(directory):
+        return f"Error: Directory not found: {directory}"
+
+    try:
+        result = subprocess.run(
+            [CHECKOV_PATH, "-d", directory, "--framework", framework, "--compact"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        if not output:
+            return "Checkov executed but produced no output (exit code: {}).".format(result.returncode)
+        return output
+    except Exception as e:
+        return f"Error running checkov: {e}"

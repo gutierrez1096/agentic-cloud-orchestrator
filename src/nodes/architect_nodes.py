@@ -11,20 +11,20 @@ def finalize_architecture_node(state: AgentState):
     
     if not messages:
         logger.error("No messages found in state")
-        return {"messages": [], "error": "No messages found in state"}
+        return {"messages": [], "errors": ["No messages found in state"]}
     
     last_message = messages[-1]
     
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         logger.error("No tool_calls found in last message")
-        return {"messages": [], "error": "No tool_calls found in last message"}
+        return {"messages": [], "errors": ["No tool_calls found in last message"]}
     
     tool_call = last_message.tool_calls[0]
     tool_call_id = tool_call.get("id")
     
     if not tool_call_id:
         logger.error("No tool_call_id found in tool_call")
-        return {"messages": [], "error": "No tool_call_id found in tool_call"}
+        return {"messages": [], "errors": ["No tool_call_id found in tool_call"]}
     
     design_args = tool_call.get("args", {})
     hcl_code = design_args.get("hcl_code", {})

@@ -48,20 +48,20 @@ def __architect_router(state):
 def __secops_router(state):
     """Router que decide el siguiente nodo después de secops_guardian."""
     messages = state.get("messages", [])
-    
+
     if not messages:
         logger.error("No messages found in SecOps router")
         return END
-        
+
     last_message = messages[-1]
-    
+
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         logger.warning("No tool calls en SecOps - respuesta directa del modelo")
         return END
-    
+
     tool_name = last_message.tool_calls[0]["name"]
     logger.info(f"SecOps tool call detectado: {tool_name}")
-    
+
     if tool_name == "SecurityReview":
         logger.info("Siguiente nodo: process_security_review")
         return "process_security_review"
@@ -88,7 +88,7 @@ async def create_supervisor_graph(checkpointer=None):
     architect_tool_node = ToolNode(architect_tools)
     secops_tool_node = ToolNode(secops_tools)
     builder = StateGraph(AgentState)
-    
+
     builder.add_node("solution_architect", partial(solution_architect_node, tools=architect_tools))
     builder.add_node("architect_tools", architect_tool_node)
     builder.add_node("finalize_architecture", finalize_architecture_node)

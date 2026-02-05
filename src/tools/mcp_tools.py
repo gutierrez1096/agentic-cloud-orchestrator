@@ -1,6 +1,10 @@
-from langchain_mcp_adapters.client import MultiServerMCPClient
-import logging
 import asyncio
+import logging
+
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+from src.tools.terraform_tools import run_checkov_scan
+
 logger = logging.getLogger(__name__)
 
 MCP_CONFIG = {
@@ -31,15 +35,20 @@ for tool in asyncio.run(pricing_client.get_tools()):
 for tool in asyncio.run(terraform_client.get_tools()):
     logger.debug(f"Terraform Tool: {tool.name}")
 
+
+def __filter_terraform_tools(terraform_tools):
+    BLOCKED = {"ExecuteTerraformCommand", "execute_terraform_command", "RunCheckovScan", "ExecuteTerragruntCommand"}
+    return [t for t in terraform_tools if t.name not in BLOCKED]
+
+
 async def get_solution_architect_tools():
     pricing_tools = await pricing_client.get_tools()
     terraform_tools = await terraform_client.get_tools()
-    
-    BLOCKED_TOOLS = {"ExecuteTerraformCommand", "execute_terraform_command"}
-    safe_terraform_tools = [t for t in terraform_tools if t.name not in BLOCKED_TOOLS]
-    
+    safe_terraform_tools = __filter_terraform_tools(terraform_tools)
     return pricing_tools + safe_terraform_tools
+
 
 async def get_secops_guardian_tools():
     terraform_tools = await terraform_client.get_tools()
-    return terraform_tools
+    safe_terraform_tools = __filter_terraform_tools(terraform_tools)
+    return safe_terraform_tools + [run_checkov_scan]

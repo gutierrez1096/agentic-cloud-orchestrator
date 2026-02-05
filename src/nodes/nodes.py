@@ -9,7 +9,11 @@ logger = logging.getLogger(__name__)
 def apply_to_workspace_node(state: AgentState):
     """Escribe el código Terraform al workspace."""
     logger.info("--- WRITING FILES TO WORKSPACE ---")
-    tf_code = state["terraform_code"]  # Ya es Dict[str, str]
+    tf_code = state.get("terraform_code", {})
+    
+    if not tf_code:
+        logger.error("No terraform_code found in state")
+        return {"errors": ["No terraform_code found in state"]}
     
     results = []
     
@@ -85,12 +89,26 @@ def terraform_plan_node(state: AgentState):
 def process_security_review_node(state: AgentState):
     """Procesa el veredicto de SecurityReview y actualiza el estado."""
     logger.info("--- PROCESSING SECURITY REVIEW ---")
-    messages = state["messages"]
+    messages = state.get("messages", [])
+    
+    if not messages:
+        logger.error("No messages found in state")
+        return {"errors": ["No messages found in state"]}
+    
     last_message = messages[-1]
     
+    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
+        logger.error("No tool_calls found in last message")
+        return {"errors": ["No tool_calls found in last message"]}
+    
     tool_call = last_message.tool_calls[0]
-    tool_call_id = tool_call["id"]
-    args = tool_call["args"]
+    tool_call_id = tool_call.get("id")
+    
+    if not tool_call_id:
+        logger.error("No tool_call_id found in tool_call")
+        return {"errors": ["No tool_call_id found in tool_call"]}
+    
+    args = tool_call.get("args", {})
     
     is_approved = args.get("is_approved", False)
     risk_analysis = args.get("risk_analysis", "")

@@ -118,7 +118,7 @@ if user_message:
         with st.spinner("Architecting..."):
             config = {
                 "configurable": {"thread_id": st.session_state.thread_id},
-                "recursion_limit": 15
+                # "recursion_limit": 15
                 }
                 
             inputs = {"messages": [HumanMessage(content=user_message)]}
@@ -156,19 +156,24 @@ if user_message:
                             for filename in created_files:
                                 st.text(f"• {filename}")
                     
-                    tf_code = final_state.get("terraform_code", "")
+                    tf_code = final_state.get("terraform_code", {})
                     if tf_code:
                         with st.expander("🛠️ Código Terraform", expanded=False):
-                            try:
-                                files_dict = json.loads(tf_code)
-                                if isinstance(files_dict, dict):
-                                    for filename, file_content in files_dict.items():
-                                        st.subheader(f"`{filename}`")
-                                        st.code(file_content, language="hcl")
-                                else:
+                            if isinstance(tf_code, dict):
+                                for filename, file_content in tf_code.items():
+                                    st.subheader(f"`{filename}`")
+                                    st.code(file_content, language="hcl")
+                            elif isinstance(tf_code, str):
+                                try:
+                                    files_dict = json.loads(tf_code)
+                                    if isinstance(files_dict, dict):
+                                        for filename, file_content in files_dict.items():
+                                            st.subheader(f"`{filename}`")
+                                            st.code(file_content, language="hcl")
+                                    else:
+                                        st.code(tf_code, language="hcl")
+                                except json.JSONDecodeError:
                                     st.code(tf_code, language="hcl")
-                            except json.JSONDecodeError:
-                                st.code(tf_code, language="hcl")
                     
                     plan_output = final_state.get("plan_output", "")
                     if plan_output:
