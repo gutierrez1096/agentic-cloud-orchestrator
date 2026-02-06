@@ -7,7 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 load_dotenv()
 
 INFRA_WORKSPACE = "./infra_workspace"
-PROTECTED_TERRAFORM_FILES = frozenset({"provider.tf"})
+PROTECTED_TERRAFORM_FILES = frozenset({"provider.tf", "localstack_providers_override.tf"})
 
 
 def get_model(model_name: str = "gpt-4.1-mini", timeout: int = 60):

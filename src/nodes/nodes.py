@@ -70,7 +70,7 @@ def terraform_init_node(state: AgentState):
             logger.error(f"Terraform init/validate failed: {errors}")
             return {
                 "init_success": False,
-                "workspace_errors": state.get("workspace_errors", []) + errors,
+                "workspace_errors": errors,
             }
         return {"init_success": True}
     except Exception as e:
@@ -87,7 +87,7 @@ def terraform_plan_node(state: AgentState):
     
     try:
         plan_result = execute_terraform_command.invoke({
-            "command": "plan",
+            "command": "plan -no-color -input=false",
             "working_directory": INFRA_WORKSPACE
         })
         

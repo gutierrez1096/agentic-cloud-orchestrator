@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import List, Any
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage, HumanMessage
 
 from src.config import get_model
 from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
@@ -15,10 +15,17 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
     
     llm_with_tools = get_model().bind_tools(tools + [TerraformDesign])
     
-    messages = state["messages"]
+    messages = list(state["messages"])
 
     if not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=ARCHITECT_SYSTEM_PROMPT)] + messages
+
+    workspace_errors = state.get("workspace_errors") or []
+    if workspace_errors:
+        error_text = "\n".join(workspace_errors)
+        messages.append(HumanMessage(
+            content=f"Terraform init/validate failed with the following errors. Fix the Terraform design and call TerraformDesign again with the corrected HCL.\n\nErrors:\n{error_text}"
+        ))
     
     response = await llm_with_tools.ainvoke(messages)
 

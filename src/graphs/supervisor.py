@@ -71,12 +71,12 @@ def __secops_router(state):
 
 
 def __after_init_router(state):
-    """Router después de terraform init: si OK → secops, si falló → END."""
+    """Router después de terraform init: si OK → secops, si falló → solution_architect para corregir."""
     if state.get("init_success", True):
         logger.info("Terraform init OK. Proceeding to secops_guardian.")
         return "secops_guardian"
-    logger.warning("Terraform init failed. Ending flow.")
-    return END
+    logger.warning("Terraform init failed. Returning to solution_architect to fix.")
+    return "solution_architect"
 
 
 def __after_security_review_router(state):
@@ -134,7 +134,7 @@ async def create_supervisor_graph(checkpointer=None):
         __after_init_router,
         {
             "secops_guardian": "secops_guardian",
-            END: END,
+            "solution_architect": "solution_architect",
         }
     )
 

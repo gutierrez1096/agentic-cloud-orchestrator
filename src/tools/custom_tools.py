@@ -48,10 +48,14 @@ def execute_terraform_command(command: str, working_directory: str = INFRA_WORKS
             cwd=working_directory,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=300,
             check=False
         )
         output = "\n".join([result.stdout or "", result.stderr or ""]).strip()
+        # Normalize Terraform's box-drawing line (─) to ASCII so it displays everywhere
+        output = output.replace("\u2500", "-")
         status = "Success" if result.returncode == 0 else f"Exit code: {result.returncode}"
         return f"Terraform command execution ({status}):\n{output}"
     except Exception as e:
@@ -76,7 +80,8 @@ def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = 
             timeout=10,
         )
         output = result.stdout.strip() or result.stderr.strip()
-        logger.info(f"Checkov output: {output}")
+        logger.info("Checkov executed successfully")
+        logger.debug(f"Checkov output: {output}")
         if not output:
             return "Checkov executed but produced no output (exit code: {}).".format(result.returncode)
         return output
