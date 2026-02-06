@@ -68,16 +68,16 @@ def finalize_secops_review_node(state: AgentState):
     
     args = tool_call.get("args", {})
     
-    verdict = args.get("verdict", "approved")
+    approved = args.get("approved", True)
     risk_analysis = args.get("risk_analysis", "")
     required_changes = args.get("required_changes", [])
     
-    logger.info(f"Security Review Verdict: {verdict}")
+    logger.info(f"Security Review approved={approved}")
     
-    if verdict == "approved" or verdict == "approved_with_warnings":
-        output_message = f"Security Review {verdict}. {risk_analysis}"
+    if approved:
+        output_message = f"Security Review approved. {risk_analysis}"
     else:
-        output_message = f"Security Review REJECTED. {risk_analysis}. Required changes: {required_changes}"
+        output_message = f"Security Review rejected. {risk_analysis}. Required changes: {required_changes}"
     
     tool_message = ToolMessage(
         content=output_message,
@@ -88,8 +88,8 @@ def finalize_secops_review_node(state: AgentState):
     current_iterations = state.get("review_iterations", 0)
     
     return {
-        "verdict": verdict,
+        "is_approved": approved,
         "messages": [tool_message],
-        "security_errors": required_changes if verdict == "rejected" else [],
+        "security_errors": required_changes if not approved else [],
         "review_iterations": current_iterations + 1
     }

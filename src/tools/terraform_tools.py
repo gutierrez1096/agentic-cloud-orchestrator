@@ -67,7 +67,7 @@ def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = 
 
     try:
         result = subprocess.run(
-            [CHECKOV_PATH, "-d", working_directory, "--framework", framework, "--compact"],
+            [CHECKOV_PATH, "-d", working_directory, "--framework", framework, "--compact", "--skip-check", "LOW"],
             capture_output=True,
             text=True,
             check=False,

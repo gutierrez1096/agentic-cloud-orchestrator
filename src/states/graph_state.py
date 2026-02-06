@@ -8,7 +8,7 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     terraform_code: NotRequired[Dict[str, str]]
     plan_output: NotRequired[str]
-    verdict: NotRequired[str]
+    is_approved: NotRequired[bool]
     architect_errors: NotRequired[List[str]]
     workspace_errors: NotRequired[List[str]]
     security_errors: NotRequired[List[str]]

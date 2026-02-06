@@ -72,8 +72,8 @@ def __secops_router(state):
 
 def __after_security_review_router(state):
     """Router después de procesar SecurityReview."""
-    if state.get("verdict") == "approved" or state.get("verdict") == "approved_with_warnings":
-        logger.info(f"Security {state.get('verdict')}. Proceeding to terraform init.")
+    if state.get("is_approved"):
+        logger.info("Security approved. Proceeding to terraform init.")
         return "terraform_init"
     
     iterations = state.get("review_iterations", 0)
