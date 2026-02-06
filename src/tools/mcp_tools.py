@@ -3,7 +3,7 @@ import logging
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from src.tools.terraform_tools import run_checkov_scan
+from src.tools.custom_tools import run_checkov_scan
 
 logger = logging.getLogger(__name__)
 

@@ -34,9 +34,11 @@ def execute_terraform_command(command: str, working_directory: str = INFRA_WORKS
 
     if not os.path.exists(working_directory):
         return f"Error: Working directory does not exist: {working_directory}"
+
+    logger.info(f"Terraform path: {TERRAFORM_PATH}")
     
     normalized_command = command.replace("terraform ", "").strip()
-    full_command = TERRAFORM_PATH + normalized_command.split()
+    full_command = [TERRAFORM_PATH] + normalized_command.split()
 
     logger.info(f"Executing Terraform command: {full_command}")
     
@@ -67,7 +69,7 @@ def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = 
 
     try:
         result = subprocess.run(
-            [CHECKOV_PATH, "-d", working_directory, "--framework", framework, "--compact", "--skip-check", "LOW"],
+            [CHECKOV_PATH, "-d", working_directory, "--framework", framework,"--quiet", "--compact", "--skip-check", "LOW"],
             capture_output=True,
             text=True,
             check=False,
