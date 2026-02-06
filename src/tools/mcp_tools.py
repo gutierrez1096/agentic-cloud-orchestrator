@@ -49,6 +49,4 @@ async def get_solution_architect_tools():
 
 
 async def get_secops_guardian_tools():
-    terraform_tools = await terraform_client.get_tools()
-    safe_terraform_tools = __filter_terraform_tools(terraform_tools)
-    return safe_terraform_tools + [run_checkov_scan]
+    return [run_checkov_scan]

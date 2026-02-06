@@ -1,7 +1,9 @@
 from src.states.graph_state import AgentState
-from src.tools.terraform_tools import write_terraform_file, execute_terraform_command, DEFAULT_WORKSPACE
+from src.tools.terraform_tools import write_terraform_file, execute_terraform_command
 from langchain_core.messages import ToolMessage
 import logging
+
+from src.config import INFRA_WORKSPACE
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +15,7 @@ def apply_to_workspace_node(state: AgentState):
     
     if not tf_code:
         logger.error("No terraform_code found in state")
-        return {"errors": ["No terraform_code found in state"]}
+        return {"workspace_errors": ["No terraform_code found in state"]}
     
     results = []
     
@@ -30,10 +32,6 @@ def apply_to_workspace_node(state: AgentState):
         logger.error(f"Error writing Terraform files: {e}")
     
     logger.info("Terraform files written successfully")
-    
-    return {
-        "next_step": "SecOps Guardian"
-    }
 
 
 def terraform_init_node(state: AgentState):
@@ -41,17 +39,26 @@ def terraform_init_node(state: AgentState):
     logger.info("--- TERRAFORM INIT ---")
     
     try:
+        fmt_result = execute_terraform_command.invoke({
+            "command": "fmt",
+            "working_directory": INFRA_WORKSPACE
+        })
+        logger.info(f"Terraform fmt completed: {fmt_result[:200]}...")
+
         init_result = execute_terraform_command.invoke({
             "command": "init",
-            "working_directory": DEFAULT_WORKSPACE
+            "working_directory": INFRA_WORKSPACE
         })
         logger.info(f"Terraform init completed: {init_result[:200]}...")
+        
+        validate_result = execute_terraform_command.invoke({
+            "command": "validate",
+            "working_directory": INFRA_WORKSPACE
+        })
+        logger.info(f"Terraform validate completed: {validate_result[:200]}...")
+    
     except Exception as e:
         logger.error(f"Error executing terraform init: {e}")
-    
-    return {
-        "next_step": "Terraform Plan"
-    }
 
 
 def terraform_plan_node(state: AgentState):
@@ -61,7 +68,7 @@ def terraform_plan_node(state: AgentState):
     try:
         plan_result = execute_terraform_command.invoke({
             "command": "plan",
-            "working_directory": DEFAULT_WORKSPACE
+            "working_directory": INFRA_WORKSPACE
         })
         
         plan_output = plan_result
@@ -73,63 +80,12 @@ def terraform_plan_node(state: AgentState):
         logger.info("Terraform plan completed")
         
         return {
-            "plan_output": plan_output,
-            "next_step": "Terraform Plan Complete"
+            "plan_output": plan_output
         }
     except Exception as e:
         logger.error(f"Error executing terraform plan: {e}")
         plan_result = f"Error executing terraform plan: {str(e)}"
         
         return {
-            "plan_output": plan_result,
-            "next_step": "Terraform Plan Failed"
+            "plan_output": plan_result
         }
-
-
-def process_security_review_node(state: AgentState):
-    """Procesa el veredicto de SecurityReview y actualiza el estado."""
-    logger.info("--- PROCESSING SECURITY REVIEW ---")
-    messages = state.get("messages", [])
-    
-    if not messages:
-        logger.error("No messages found in state")
-        return {"errors": ["No messages found in state"]}
-    
-    last_message = messages[-1]
-    
-    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.error("No tool_calls found in last message")
-        return {"errors": ["No tool_calls found in last message"]}
-    
-    tool_call = last_message.tool_calls[0]
-    tool_call_id = tool_call.get("id")
-    
-    if not tool_call_id:
-        logger.error("No tool_call_id found in tool_call")
-        return {"errors": ["No tool_call_id found in tool_call"]}
-    
-    args = tool_call.get("args", {})
-    
-    is_approved = args.get("is_approved", False)
-    risk_analysis = args.get("risk_analysis", "")
-    required_changes = args.get("required_changes", [])
-    
-    logger.info(f"Security Review Verdict: {'APPROVED' if is_approved else 'REJECTED'}")
-    
-    if is_approved:
-        output_message = f"Security Review APPROVED. {risk_analysis}"
-    else:
-        output_message = f"Security Review REJECTED. {risk_analysis}. Required changes: {required_changes}"
-    
-    tool_message = ToolMessage(
-        content=output_message,
-        tool_call_id=tool_call_id,
-        name="SecurityReview"
-    )
-    
-    return {
-        "is_approved": is_approved,
-        "messages": [tool_message],
-        "errors": required_changes if not is_approved else [],
-        "next_step": "Terraform Init" if is_approved else "Solution Architect"
-    }

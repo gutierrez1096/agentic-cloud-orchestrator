@@ -5,20 +5,20 @@ from langgraph.prebuilt import ToolNode
 
 from functools import partial
 
-from src.agents.secops_guardian import secops_guardian_node
-from src.agents.solution_architect import solution_architect_node
+from src.agents.secops_guardian import secops_guardian_node, finalize_secops_review_node
+from src.agents.solution_architect import solution_architect_node, finalize_architecture_node
 from src.states.graph_state import AgentState
 from src.tools.mcp_tools import get_secops_guardian_tools, get_solution_architect_tools
-from src.nodes.architect_nodes import finalize_architecture_node
 
 from src.nodes.nodes import (
     apply_to_workspace_node,
     terraform_init_node,
-    terraform_plan_node,
-    process_security_review_node
+    terraform_plan_node
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_REVIEW_ITERATIONS = 3
 
 
 def __architect_router(state):
@@ -63,8 +63,8 @@ def __secops_router(state):
     logger.info(f"SecOps tool call detectado: {tool_name}")
 
     if tool_name == "SecurityReview":
-        logger.info("Siguiente nodo: process_security_review")
-        return "process_security_review"
+        logger.info("Siguiente nodo: finalize_secops_review")
+        return "finalize_secops_review"
     else:
         logger.info("Siguiente nodo: secops_tools")
         return "secops_tools"
@@ -72,12 +72,17 @@ def __secops_router(state):
 
 def __after_security_review_router(state):
     """Router después de procesar SecurityReview."""
-    if state.get("is_approved"):
-        logger.info("Security approved. Proceeding to terraform init.")
+    if state.get("verdict") == "approved" or state.get("verdict") == "approved_with_warnings":
+        logger.info(f"Security {state.get('verdict')}. Proceeding to terraform init.")
         return "terraform_init"
-    else:
-        logger.info("Security rejected. Returning to architect.")
-        return "solution_architect"
+    
+    iterations = state.get("review_iterations", 0)
+    if iterations >= MAX_REVIEW_ITERATIONS:
+        logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform init.")
+        return "terraform_init"
+    
+    logger.info(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
+    return "solution_architect"
 
 
 async def create_supervisor_graph(checkpointer=None):
@@ -94,7 +99,7 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_node("finalize_architecture", finalize_architecture_node)
     builder.add_node("secops_guardian", partial(secops_guardian_node, tools=secops_tools))
     builder.add_node("secops_tools", secops_tool_node)
-    builder.add_node("process_security_review", process_security_review_node)
+    builder.add_node("finalize_secops_review", finalize_secops_review_node)
     builder.add_node("apply_to_workspace", apply_to_workspace_node)
     builder.add_node("terraform_init", terraform_init_node)
     builder.add_node("terraform_plan", terraform_plan_node)
@@ -120,7 +125,7 @@ async def create_supervisor_graph(checkpointer=None):
         __secops_router,
         {
             "secops_tools": "secops_tools",
-            "process_security_review": "process_security_review",
+            "finalize_secops_review": "finalize_secops_review",
             END: END
         }
     )
@@ -128,7 +133,7 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_edge("secops_tools", "secops_guardian")
     
     builder.add_conditional_edges(
-        "process_security_review",
+        "finalize_secops_review",
         __after_security_review_router,
         {
             "terraform_init": "terraform_init",

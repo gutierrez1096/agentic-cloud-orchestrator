@@ -9,8 +9,6 @@ from src.config import INFRA_WORKSPACE, PROTECTED_TERRAFORM_FILES
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WORKSPACE = INFRA_WORKSPACE
-
 CHECKOV_PATH = shutil.which("checkov", path=os.path.dirname(sys.executable)) or shutil.which("checkov")
 
 TERRAFORM_PATH = shutil.which("tflocal", path=os.path.dirname(sys.executable)) or shutil.which("tflocal")
@@ -22,8 +20,8 @@ def write_terraform_file(content: str, filename: str = "main.tf") -> str:
         logger.warning(f"Attempted to write to protected file: {filename}")
         return f"Error: '{filename}' is a protected file and cannot be modified. This file contains critical infrastructure configuration."
     
-    os.makedirs(DEFAULT_WORKSPACE, exist_ok=True)
-    file_path = os.path.join(DEFAULT_WORKSPACE, filename)
+    os.makedirs(INFRA_WORKSPACE, exist_ok=True)
+    file_path = os.path.join(INFRA_WORKSPACE, filename)
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
     logger.info(f"Wrote Terraform file: {file_path}")
@@ -31,13 +29,16 @@ def write_terraform_file(content: str, filename: str = "main.tf") -> str:
 
 
 @tool
-def execute_terraform_command(command: str, working_directory: str = DEFAULT_WORKSPACE) -> str:
+def execute_terraform_command(command: str, working_directory: str = INFRA_WORKSPACE) -> str:
     """Execute a Terraform command using tflocal."""
+
     if not os.path.exists(working_directory):
         return f"Error: Working directory does not exist: {working_directory}"
     
     normalized_command = command.replace("terraform ", "").strip()
-    full_command = ["tflocal"] + normalized_command.split()
+    full_command = TERRAFORM_PATH + normalized_command.split()
+
+    logger.info(f"Executing Terraform command: {full_command}")
     
     try:
         result = subprocess.run(
@@ -58,21 +59,22 @@ def execute_terraform_command(command: str, working_directory: str = DEFAULT_WOR
 @tool(
     "RunCheckovScan"
 )
-def run_checkov_scan(directory: str = INFRA_WORKSPACE, framework: str = "terraform") -> str:
+def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = "terraform") -> str:
     """Run Checkov security scan on Terraform code to identify vulnerabilities and misconfigurations."""
     
-    if not os.path.exists(directory):
-        return f"Error: Directory not found: {directory}"
+    if not os.path.exists(working_directory):
+        return f"Error: Working directory does not exist: {working_directory}"
 
     try:
         result = subprocess.run(
-            [CHECKOV_PATH, "-d", directory, "--framework", framework, "--compact"],
+            [CHECKOV_PATH, "-d", working_directory, "--framework", framework, "--compact"],
             capture_output=True,
             text=True,
             check=False,
             timeout=10,
         )
         output = result.stdout.strip() or result.stderr.strip()
+        logger.info(f"Checkov output: {output}")
         if not output:
             return "Checkov executed but produced no output (exit code: {}).".format(result.returncode)
         return output

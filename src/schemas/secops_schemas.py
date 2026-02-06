@@ -1,9 +1,15 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from enum import Enum
+
+class ReviewVerdict(str, Enum):
+    APPROVED = "approved"
+    APPROVED_WITH_WARNINGS = "approved_with_warnings"
+    REJECTED = "rejected"
 
 class SecurityReview(BaseModel):
     """Resultado de la revisión de seguridad del código Terraform."""
-    
-    is_approved: bool = Field(..., description="True si el código cumple los estándares de seguridad.")
-    risk_analysis: str = Field(..., description="Análisis detallado de riesgos y cumplimiento de benchmarks.")
-    required_changes: Optional[List[str]] = Field(default=[], description="Cambios requeridos para aprobar el diseño.")
+    verdict: ReviewVerdict = Field(..., description="approved: sin hallazgos. approved_with_warnings: hallazgos medium/low. rejected: solo si hay hallazgos Critical o High.")
+    risk_analysis: str = Field(...)
+    critical_findings: Optional[List[str]] = Field(default=[])
+    warnings: Optional[List[str]] = Field(default=[])
