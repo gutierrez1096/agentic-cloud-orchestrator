@@ -56,8 +56,8 @@ def __secops_router(state):
     last_message = messages[-1]
 
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls en SecOps - respuesta directa del modelo")
-        return END
+        logger.warning("No tool calls en SecOps - volviendo a secops_guardian")
+        return "secops_guardian"
 
     tool_name = last_message.tool_calls[0]["name"]
     logger.info(f"SecOps tool call detectado: {tool_name}")
@@ -70,16 +70,25 @@ def __secops_router(state):
         return "secops_tools"
 
 
+def __after_init_router(state):
+    """Router después de terraform init: si OK → secops, si falló → END."""
+    if state.get("init_success", True):
+        logger.info("Terraform init OK. Proceeding to secops_guardian.")
+        return "secops_guardian"
+    logger.warning("Terraform init failed. Ending flow.")
+    return END
+
+
 def __after_security_review_router(state):
     """Router después de procesar SecurityReview."""
     if state.get("is_approved"):
-        logger.info("Security approved. Proceeding to terraform init.")
-        return "terraform_init"
+        logger.info("Security approved. Proceeding to terraform plan.")
+        return "terraform_plan"
     
     iterations = state.get("review_iterations", 0)
     if iterations >= MAX_REVIEW_ITERATIONS:
-        logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform init.")
-        return "terraform_init"
+        logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform plan.")
+        return "terraform_plan"
     
     logger.info(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
     return "solution_architect"
@@ -118,7 +127,16 @@ async def create_supervisor_graph(checkpointer=None):
     
     builder.add_edge("architect_tools", "solution_architect")
     builder.add_edge("finalize_architecture", "apply_to_workspace")
-    builder.add_edge("apply_to_workspace", "secops_guardian")
+    builder.add_edge("apply_to_workspace", "terraform_init")
+
+    builder.add_conditional_edges(
+        "terraform_init",
+        __after_init_router,
+        {
+            "secops_guardian": "secops_guardian",
+            END: END,
+        }
+    )
 
     builder.add_conditional_edges(
         "secops_guardian",
@@ -126,6 +144,7 @@ async def create_supervisor_graph(checkpointer=None):
         {
             "secops_tools": "secops_tools",
             "finalize_secops_review": "finalize_secops_review",
+            "secops_guardian": "secops_guardian",
             END: END
         }
     )
@@ -136,11 +155,10 @@ async def create_supervisor_graph(checkpointer=None):
         "finalize_secops_review",
         __after_security_review_router,
         {
-            "terraform_init": "terraform_init",
+            "terraform_plan": "terraform_plan",
             "solution_architect": "solution_architect",
         }
     )
-    builder.add_edge("terraform_init", "terraform_plan")
     builder.add_edge("terraform_plan", END)
 
     return builder.compile(checkpointer=checkpointer)

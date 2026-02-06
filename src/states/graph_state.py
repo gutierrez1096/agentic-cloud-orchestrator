@@ -15,3 +15,4 @@ class AgentState(TypedDict):
     architect_rationale: NotRequired[str]
     created_files: NotRequired[List[str]]
     review_iterations: NotRequired[int]
+    init_success: NotRequired[bool]

@@ -36,7 +36,7 @@ Ensure production-grade security for all infrastructure code through comprehensi
 ---
 
 ### Finalization
-After analysis, deliver a detailed assessment outlining findings, affected resources, and specific remediation recommendations. Call the `SecurityReview` tool with: `approved` (boolean: True if the code passes review, False if Critical or High findings require rejection), `risk_analysis` (summary string), and when not approving, `required_changes` (list of fixes). Be explicit about any required fixes prior to approval.
+After running Checkov and reviewing the scan results, you **must** call the `SecurityReview` tool. Do not reply with plain text only. Call `SecurityReview` with: `approved` (boolean: True if acceptable, False if Critical/High findings), `risk_analysis` (short summary), and when not approving, `required_changes` (list of fixes).
 
 ---
 

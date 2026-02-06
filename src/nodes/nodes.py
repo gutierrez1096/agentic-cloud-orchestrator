@@ -37,7 +37,11 @@ def apply_to_workspace_node(state: AgentState):
 def terraform_init_node(state: AgentState):
     """Ejecuta terraform init en el workspace."""
     logger.info("--- TERRAFORM INIT ---")
-    
+    errors = []
+
+    def _is_success(result: str) -> bool:
+        return "Success" in result and "Exit code:" not in result
+
     try:
         fmt_result = execute_terraform_command.invoke({
             "command": "fmt",
@@ -50,15 +54,31 @@ def terraform_init_node(state: AgentState):
             "working_directory": INFRA_WORKSPACE
         })
         logger.info(f"Terraform init completed: {init_result[:200]}...")
-        
+        if not _is_success(init_result):
+            errors.append(f"terraform init failed: {init_result}")
+
         validate_result = execute_terraform_command.invoke({
             "command": "validate",
             "working_directory": INFRA_WORKSPACE
         })
         logger.info(f"Terraform validate completed: {validate_result[:200]}...")
-    
+        if not _is_success(validate_result):
+            errors.append(f"terraform validate failed: {validate_result}")
+
+        init_success = len(errors) == 0
+        if not init_success:
+            logger.error(f"Terraform init/validate failed: {errors}")
+            return {
+                "init_success": False,
+                "workspace_errors": state.get("workspace_errors", []) + errors,
+            }
+        return {"init_success": True}
     except Exception as e:
         logger.error(f"Error executing terraform init: {e}")
+        return {
+            "init_success": False,
+            "workspace_errors": state.get("workspace_errors", []) + [str(e)],
+        }
 
 
 def terraform_plan_node(state: AgentState):
