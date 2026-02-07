@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import List, Any
-from langchain_core.messages import SystemMessage, ToolMessage, HumanMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, HumanMessage
 
 from src.config import get_model
 from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
@@ -46,14 +46,14 @@ def finalize_architecture_node(state: AgentState):
     
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         logger.error("No tool_calls found in last message")
-        return {"messages": [], "architect_errors": ["No tool_calls found in last message"]}
-    
+        return {"messages": [AIMessage(content="Error: No tool_calls found in last message.")]}
+
     tool_call = last_message.tool_calls[0]
     tool_call_id = tool_call.get("id")
-    
+
     if not tool_call_id:
         logger.error("No tool_call_id found in tool_call")
-        return {"messages": [], "architect_errors": ["No tool_call_id found in tool_call"]}
+        return {"messages": [AIMessage(content="Error: No tool_call_id found in tool_call.")]}
     
     design_args = tool_call.get("args", {})
     hcl_code = design_args.get("hcl_code", {})

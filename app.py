@@ -204,18 +204,6 @@ if user_message:
                         with st.expander("📋 Architect Rationale", expanded=False):
                             st.markdown(rationale)
 
-                    architect_errors = final_state.get("architect_errors", [])
-                    if architect_errors:
-                        with st.expander("⚠️ Architect Errors", expanded=True):
-                            for err in architect_errors:
-                                st.text(f"• {err}")
-
-                    security_errors = final_state.get("security_errors", [])
-                    if security_errors:
-                        with st.expander("⚠️ Security Errors", expanded=True):
-                            for err in security_errors:
-                                st.text(f"• {err}")
-
                     created_files = final_state.get("created_files", [])
                     if created_files:
                         with st.expander("📁 Created Files", expanded=False):
