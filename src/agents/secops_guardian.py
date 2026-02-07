@@ -93,9 +93,18 @@ def finalize_secops_review_node(state: AgentState):
     )
     
     current_iterations = state.get("review_iterations", 0)
-    
+
+    if approved:
+        secops_updates = {"secops_required_changes": [], "secops_risk_analysis": ""}
+    else:
+        secops_updates = {
+            "secops_required_changes": required_changes if isinstance(required_changes, list) else [],
+            "secops_risk_analysis": risk_analysis or "",
+        }
+
     return {
         "is_approved": approved,
         "messages": [tool_message],
-        "review_iterations": current_iterations + 1
+        "review_iterations": current_iterations + 1,
+        **secops_updates,
     }

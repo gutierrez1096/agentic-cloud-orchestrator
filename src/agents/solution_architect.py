@@ -29,7 +29,20 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
         messages.append(HumanMessage(
             content=f"Terraform init/validate failed with the following errors. Fix the Terraform design and call TerraformDesign again with the corrected HCL.\n\nErrors:\n{error_text}"
         ))
-    
+
+    secops_required_changes = state.get("secops_required_changes") or []
+    if secops_required_changes:
+        risk_analysis = state.get("secops_risk_analysis") or ""
+        changes_bullets = "\n".join(f"- {c}" for c in secops_required_changes)
+        patch_content = (
+            "**Patch mode (SecOps rejection).** Apply ONLY the following changes to the existing Terraform design and call TerraformDesign with the updated HCL. "
+            "Do NOT call analyze_terraform_project or SearchAwsProviderDocs again.\n\n"
+            f"Required changes:\n{changes_bullets}"
+        )
+        if risk_analysis:
+            patch_content = f"SecOps risk analysis: {risk_analysis}\n\n{patch_content}"
+        messages.append(HumanMessage(content=patch_content))
+
     response = await llm_with_tools.ainvoke(messages)
 
     if response.tool_calls:
@@ -80,5 +93,7 @@ def finalize_architecture_node(state: AgentState):
         "terraform_code": hcl_code,
         "architect_rationale": rationale,
         "created_files": created_files,
-        "messages": [tool_message]
+        "messages": [tool_message],
+        "secops_required_changes": [],
+        "secops_risk_analysis": "",
     }

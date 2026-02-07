@@ -15,6 +15,8 @@ class AgentState(TypedDict):
     architect_rationale: NotRequired[str]
     created_files: NotRequired[List[str]]
     review_iterations: NotRequired[int]
+    secops_required_changes: NotRequired[List[str]]
+    secops_risk_analysis: NotRequired[str]
     init_success: NotRequired[bool]
     human_decision: NotRequired[Literal["approve", "revise", "reject"]]
     apply_output: NotRequired[str]
