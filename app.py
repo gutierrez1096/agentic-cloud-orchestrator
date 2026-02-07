@@ -24,6 +24,18 @@ SUGGESTIONS = {
     "🛡️ VPC Setup": "Architect a VPC with public and private subnets.",
 }
 
+NODE_LABELS = {
+    "solution_architect": "Designing architecture",
+    "finalize_architecture": "Finalizing design",
+    "apply_to_workspace": "Writing Terraform files",
+    "terraform_init": "Initializing Terraform",
+    "secops_guardian": "Security review",
+    "finalize_secops_review": "Security review",
+    "terraform_plan": "Generating plan",
+    "human_approval": "Waiting for your approval",
+    "terraform_apply": "Applying plan",
+}
+
 if "thread_id" not in st.session_state:
     logger.debug("New session started")
     st.session_state.thread_id = str(uuid.uuid4())
@@ -40,13 +52,24 @@ if "selected_suggestion" not in st.session_state:
     st.session_state.selected_suggestion = None
 if "pending_approval" not in st.session_state:
     st.session_state.pending_approval = False
+if "applying" not in st.session_state:
+    st.session_state.applying = False
 
 
-async def run_graph(inputs=None, resume=None):
+async def run_graph(inputs=None, resume=None, step_placeholder=None):
     """Runs the graph (inputs) or resumes after interrupt (resume). Returns (state, interrupted)."""
     graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
     config = {"configurable": {"thread_id": st.session_state.thread_id}}
     inp = Command(resume=resume) if resume else inputs
+    if step_placeholder is not None:
+        async for event in graph.astream(inp, config, stream_mode="updates"):
+            for node_name in event:
+                label = NODE_LABELS.get(node_name, node_name)
+                step_placeholder.markdown(f"**Step:** {label}")
+        snapshot = await graph.aget_state(config)
+        result = snapshot.values if snapshot else None
+        interrupted = bool(snapshot.interrupts) if snapshot else False
+        return result, interrupted
     result = None
     async for event in graph.astream(inp, config, stream_mode="values"):
         result = event
@@ -86,6 +109,7 @@ with title_row:
         st.session_state.initial_question = None
         st.session_state.selected_suggestion = None
         st.session_state.pending_approval = False
+        st.session_state.applying = False
         st.session_state.thread_id = str(uuid.uuid4())
         st.session_state.memory = MemorySaver()
 
@@ -132,55 +156,64 @@ if not user_message:
     if user_just_clicked_suggestion:
         user_message = SUGGESTIONS[st.session_state.selected_suggestion]
 
-for message in st.session_state.messages:
+messages = st.session_state.messages
+for i, message in enumerate(messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         if message.get("role") == "assistant":
             if message.get("plan_output"):
                 with st.expander("Plan output (completo)", expanded=False):
                     st.code(message["plan_output"], language="text")
-            if message.get("apply_output"):
-                with st.expander("Apply output (completo)", expanded=False):
-                    st.code(message["apply_output"], language="text")
+            if message.get("apply_summary") or message.get("apply_output"):
+                st.markdown("Plan aplicado.")
+                if message.get("apply_summary"):
+                    st.markdown(f"**Apply summary:** {message['apply_summary']}")
+                if message.get("apply_output"):
+                    with st.expander("Apply output (completo)", expanded=False):
+                        st.code(message["apply_output"], language="text")
+            if message.get("rejected"):
+                st.markdown("Plan rechazado.")
+            is_last = i == len(messages) - 1
+            if st.session_state.pending_approval and is_last:
+                type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
+                if st.session_state.get("applying"):
+                    resume = {
+                        "type": st.session_state.get("hitl_decision", "reject"),
+                        "feedback": st.session_state.get("hitl_feedback", ""),
+                    }
+                    with st.spinner("Applying plan..."):
+                        final_state, interrupted = asyncio.run(run_graph(resume=resume))
+                    st.session_state.applying = False
+                    st.session_state.pending_approval = False
+                    if interrupted:
+                        content = _assistant_content_from_state(final_state)
+                        if content:
+                            msg = {"role": "assistant", "content": content}
+                            if final_state.get("plan_output"):
+                                msg["plan_summary"] = final_state.get("plan_summary", "")
+                                msg["plan_output"] = final_state["plan_output"]
+                            st.session_state.messages.append(msg)
+                        st.session_state.pending_approval = True
+                    else:
+                        last = st.session_state.messages[-1]
+                        if resume["type"] == "approve":
+                            last["apply_summary"] = final_state.get("apply_summary", "")
+                            last["apply_output"] = final_state.get("apply_output", "") or ""
+                        else:
+                            last["rejected"] = True
+                    st.rerun()
+                else:
+                    with st.form("hitl"):
+                        decision = st.radio("Decision", ["Approve", "Reject", "Request changes"])
+                        feedback = st.text_area("Changes (optional)")
+                        submitted = st.form_submit_button("Submit")
+                    if submitted:
+                        st.session_state.applying = True
+                        st.session_state.hitl_decision = type_map[decision]
+                        st.session_state.hitl_feedback = feedback or ""
+                        st.rerun()
 
 if st.session_state.pending_approval:
-    with st.chat_message("assistant"):
-        with st.form("hitl"):
-            decision = st.radio("Decision", ["Approve", "Reject", "Request changes"])
-            feedback = st.text_area("Changes (optional)")
-            submitted = st.form_submit_button("Submit")
-    if submitted:
-        type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
-        resume = {"type": type_map[decision], "feedback": feedback or ""}
-        final_state, interrupted = asyncio.run(run_graph(resume=resume))
-        st.session_state.pending_approval = False
-        if interrupted:
-            content = _assistant_content_from_state(final_state)
-            if content:
-                msg = {"role": "assistant", "content": content}
-                if final_state.get("plan_output"):
-                    msg["plan_summary"] = final_state.get("plan_summary", "")
-                    msg["plan_output"] = final_state["plan_output"]
-                st.session_state.messages.append(msg)
-            st.session_state.pending_approval = True
-        else:
-            if resume["type"] == "approve":
-                apply_summary = final_state.get("apply_summary", "")
-                apply_out = final_state.get("apply_output", "")
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": f"Plan approved.\n\n**Apply summary:** {apply_summary}",
-                    "plan_summary": final_state.get("plan_summary", ""),
-                    "plan_output": final_state.get("plan_output", ""),
-                    "apply_summary": apply_summary,
-                    "apply_output": apply_out or "",
-                })
-            else:
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": "Plan rejected by user."
-                })
-        st.rerun()
     st.stop()
 
 if user_message:
@@ -192,13 +225,15 @@ if user_message:
     st.session_state.selected_suggestion = None
 
     with st.chat_message("assistant"):
+        step_placeholder = st.empty()
         with st.spinner("Architecting..."):
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
             inputs = {"messages": [SystemMessage(content=ARCHITECT_SYSTEM_PROMPT), HumanMessage(content=user_message)]}
 
             try:
-                final_state, interrupted = asyncio.run(run_graph(inputs=inputs))
+                final_state, interrupted = asyncio.run(run_graph(inputs=inputs, step_placeholder=step_placeholder))
 
+                step_placeholder.empty()
                 if interrupted:
                     content = _assistant_content_from_state(final_state)
                     if content:
