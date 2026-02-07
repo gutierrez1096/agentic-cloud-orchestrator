@@ -39,7 +39,13 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
     else:
         logger.debug("Model generated direct response")
 
-    return {"messages": [response]}
+    return {
+        "messages": [response],
+        "review_iterations": 0,
+        "debugger_init_attempts": 0,
+        "debugger_plan_attempts": 0,
+        "debugger_apply_attempts": 0,
+    }
 
 def finalize_architecture_node(state: AgentState):
     logger.debug("--- FINALIZING ARCHITECTURE ---")

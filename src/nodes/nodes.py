@@ -12,6 +12,11 @@ from src.tools.custom_tools import write_terraform_file, execute_terraform_comma
 logger = logging.getLogger(__name__)
 
 
+def _is_terraform_success(result: str) -> bool:
+    """True if Terraform command output indicates success (no Exit code)."""
+    return "Success" in result and "Exit code:" not in result
+
+
 def _plan_summary_from_json(workspace: str) -> str:
     """Resumen Add/Change/Delete desde terraform show -json tfplan."""
     plan_path = os.path.join(workspace, "tfplan")
@@ -64,9 +69,6 @@ def terraform_init_node(state: AgentState):
     logger.debug("--- TERRAFORM INIT ---")
     errors = []
 
-    def _is_success(result: str) -> bool:
-        return "Success" in result and "Exit code:" not in result
-
     try:
         fmt_result = execute_terraform_command.invoke({
             "command": "fmt",
@@ -79,7 +81,7 @@ def terraform_init_node(state: AgentState):
             "working_directory": INFRA_WORKSPACE
         })
         logger.debug(f"Terraform init completed: {init_result[:200]}...")
-        if not _is_success(init_result):
+        if not _is_terraform_success(init_result):
             errors.append(f"terraform init failed: {init_result}")
 
         validate_result = execute_terraform_command.invoke({
@@ -87,7 +89,7 @@ def terraform_init_node(state: AgentState):
             "working_directory": INFRA_WORKSPACE
         })
         logger.debug(f"Terraform validate completed: {validate_result[:200]}...")
-        if not _is_success(validate_result):
+        if not _is_terraform_success(validate_result):
             errors.append(f"terraform validate failed: {validate_result}")
 
         init_success = len(errors) == 0
@@ -97,7 +99,7 @@ def terraform_init_node(state: AgentState):
                 "init_success": False,
                 "workspace_errors": errors,
             }
-        return {"init_success": True}
+        return {"init_success": True, "debugger_init_attempts": 0}
     except Exception as e:
         logger.error(f"Error executing terraform init: {e}")
         return {
@@ -119,11 +121,16 @@ def terraform_plan_node(state: AgentState):
             plan_output = plan_result.split("Terraform command execution", 1)[-1]
             if ":\n" in plan_output:
                 plan_output = plan_output.split(":\n", 1)[1]
-        plan_summary = _plan_summary_from_json(INFRA_WORKSPACE)
-        return {"plan_output": plan_output, "plan_summary": plan_summary or ""}
+        plan_success = _is_terraform_success(plan_result)
+        plan_summary = _plan_summary_from_json(INFRA_WORKSPACE) if plan_success else ""
+        updates = {"plan_output": plan_output, "plan_summary": plan_summary or "", "plan_success": plan_success}
+        if plan_success:
+            updates["debugger_plan_attempts"] = 0
+        updates["review_iterations"] = 0
+        return updates
     except Exception as e:
         logger.error(f"Error executing terraform plan: {e}")
-        return {"plan_output": f"Error executing terraform plan: {str(e)}", "plan_summary": ""}
+        return {"plan_output": f"Error executing terraform plan: {str(e)}", "plan_summary": "", "plan_success": False}
 
 
 def human_approval_node(state: AgentState):
@@ -155,8 +162,12 @@ def terraform_apply_node(state: AgentState):
             apply_output = apply_result.split("Terraform command execution", 1)[-1]
             if ":\n" in apply_output:
                 apply_output = apply_output.split(":\n", 1)[1]
+        apply_success = _is_terraform_success(apply_result)
         apply_summary = state.get("plan_summary", "") or "Applied."
-        return {"apply_output": apply_output, "apply_summary": apply_summary}
+        updates = {"apply_output": apply_output, "apply_summary": apply_summary, "apply_success": apply_success}
+        if apply_success:
+            updates["debugger_apply_attempts"] = 0
+        return updates
     except Exception as e:
         logger.error(f"Error executing terraform apply: {e}")
-        return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": ""}
+        return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": "", "apply_success": False}

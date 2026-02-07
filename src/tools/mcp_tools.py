@@ -41,6 +41,18 @@ def __filter_terraform_tools(terraform_tools):
     return [t for t in terraform_tools if t.name not in BLOCKED]
 
 
+def __filter_terraform_tools_for_debugger(terraform_tools):
+    """Debugger gets Terraform MCP including ExecuteTerraformCommand; only block Terragrunt and Checkov."""
+    BLOCKED = {"RunCheckovScan", "ExecuteTerragruntCommand"}
+    return [t for t in terraform_tools if t.name not in BLOCKED]
+
+
+async def get_iac_debugger_tools():
+    """Terraform MCP tools for the IaC Debugger, including ExecuteTerraformCommand."""
+    terraform_tools = await terraform_client.get_tools()
+    return __filter_terraform_tools_for_debugger(terraform_tools)
+
+
 async def get_solution_architect_tools():
     pricing_tools = await pricing_client.get_tools()
     terraform_tools = await terraform_client.get_tools()

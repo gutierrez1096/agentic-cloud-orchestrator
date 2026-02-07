@@ -7,8 +7,9 @@ from functools import partial
 
 from src.agents.secops_guardian import secops_guardian_node, finalize_secops_review_node
 from src.agents.solution_architect import solution_architect_node, finalize_architecture_node
+from src.agents.iac_debugger import iac_debugger_node, finalize_debugger_node
 from src.states.graph_state import AgentState
-from src.tools.mcp_tools import get_secops_guardian_tools, get_solution_architect_tools
+from src.tools.mcp_tools import get_secops_guardian_tools, get_solution_architect_tools, get_iac_debugger_tools
 
 from src.nodes.nodes import (
     apply_to_workspace_node,
@@ -21,6 +22,7 @@ from src.nodes.nodes import (
 logger = logging.getLogger(__name__)
 
 MAX_REVIEW_ITERATIONS = 3
+MAX_DEBUGGER_ATTEMPTS = 2
 
 
 def _route_by_tool(state, mapping, default=END):
@@ -60,12 +62,16 @@ def __secops_router(state):
 
 
 def __after_init_router(state):
-    """Router after terraform init: if OK → secops, if failed → solution_architect to fix."""
+    """Router after terraform init: if OK → secops; if failed and under max debugger attempts → iac_debugger; else → solution_architect."""
     if state.get("init_success", True):
         logger.debug("Terraform init OK. Proceeding to secops_guardian.")
         return "secops_guardian"
-    logger.warning("Terraform init failed. Returning to solution_architect to fix.")
-    return "solution_architect"
+    attempts = state.get("debugger_init_attempts", 0)
+    if attempts >= MAX_DEBUGGER_ATTEMPTS:
+        logger.warning("Terraform init failed; max debugger attempts reached. Returning to solution_architect.")
+        return "solution_architect"
+    logger.warning("Terraform init failed. Proceeding to iac_debugger.")
+    return "iac_debugger"
 
 
 def __after_security_review_router(state):
@@ -81,6 +87,41 @@ def __after_security_review_router(state):
     
     logger.warning(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
     return "solution_architect"
+
+
+def __after_plan_router(state):
+    """Router after terraform plan: if OK → human_approval; if failed and under max debugger attempts → iac_debugger; else → solution_architect."""
+    if state.get("plan_success", True):
+        logger.debug("Terraform plan OK. Proceeding to human_approval.")
+        return "human_approval"
+    attempts = state.get("debugger_plan_attempts", 0)
+    if attempts >= MAX_DEBUGGER_ATTEMPTS:
+        logger.warning("Terraform plan failed; max debugger attempts reached. Returning to solution_architect.")
+        return "solution_architect"
+    logger.warning("Terraform plan failed. Proceeding to iac_debugger.")
+    return "iac_debugger"
+
+
+def __after_apply_router(state):
+    """Router after terraform apply: if OK → END; if failed and under max debugger attempts → iac_debugger; else → solution_architect."""
+    if state.get("apply_success", True):
+        logger.debug("Terraform apply OK. Ending flow.")
+        return END
+    attempts = state.get("debugger_apply_attempts", 0)
+    if attempts >= MAX_DEBUGGER_ATTEMPTS:
+        logger.warning("Terraform apply failed; max debugger attempts reached. Returning to solution_architect.")
+        return "solution_architect"
+    logger.warning("Terraform apply failed. Proceeding to iac_debugger.")
+    return "iac_debugger"
+
+
+def __debugger_router(state):
+    """Router after iac_debugger: TerraformFix → finalize_debugger; other tool → debugger_tools."""
+    return _route_by_tool(
+        state,
+        mapping={"TerraformFix": "finalize_debugger"},
+        default="debugger_tools",
+    )
 
 
 def __after_human_approval_router(state):
@@ -101,8 +142,10 @@ async def create_supervisor_graph(checkpointer=None):
 
     architect_tools = await get_solution_architect_tools()
     secops_tools = await get_secops_guardian_tools()
+    debugger_tools = await get_iac_debugger_tools()
     architect_tool_node = ToolNode(architect_tools)
     secops_tool_node = ToolNode(secops_tools)
+    debugger_tool_node = ToolNode(debugger_tools)
     builder = StateGraph(AgentState)
 
     builder.add_node("solution_architect", partial(solution_architect_node, tools=architect_tools))
@@ -116,6 +159,9 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_node("terraform_plan", terraform_plan_node)
     builder.add_node("human_approval", human_approval_node)
     builder.add_node("terraform_apply", terraform_apply_node)
+    builder.add_node("iac_debugger", partial(iac_debugger_node, tools=debugger_tools))
+    builder.add_node("debugger_tools", debugger_tool_node)
+    builder.add_node("finalize_debugger", finalize_debugger_node)
 
     builder.set_entry_point("solution_architect")
 
@@ -139,6 +185,7 @@ async def create_supervisor_graph(checkpointer=None):
         {
             "secops_guardian": "secops_guardian",
             "solution_architect": "solution_architect",
+            "iac_debugger": "iac_debugger",
         }
     )
 
@@ -163,7 +210,15 @@ async def create_supervisor_graph(checkpointer=None):
             "solution_architect": "solution_architect",
         }
     )
-    builder.add_edge("terraform_plan", "human_approval")
+    builder.add_conditional_edges(
+        "terraform_plan",
+        __after_plan_router,
+        {
+            "human_approval": "human_approval",
+            "iac_debugger": "iac_debugger",
+            "solution_architect": "solution_architect",
+        }
+    )
     builder.add_conditional_edges(
         "human_approval",
         __after_human_approval_router,
@@ -173,6 +228,25 @@ async def create_supervisor_graph(checkpointer=None):
             END: END,
         }
     )
-    builder.add_edge("terraform_apply", END)
+    builder.add_conditional_edges(
+        "terraform_apply",
+        __after_apply_router,
+        {
+            END: END,
+            "iac_debugger": "iac_debugger",
+            "solution_architect": "solution_architect",
+        }
+    )
+    builder.add_conditional_edges(
+        "iac_debugger",
+        __debugger_router,
+        {
+            "finalize_debugger": "finalize_debugger",
+            "debugger_tools": "debugger_tools",
+            END: END,
+        }
+    )
+    builder.add_edge("debugger_tools", "iac_debugger")
+    builder.add_edge("finalize_debugger", "apply_to_workspace")
 
     return builder.compile(checkpointer=checkpointer)

@@ -34,6 +34,9 @@ NODE_LABELS = {
     "terraform_plan": "Generating plan",
     "human_approval": "Waiting for your approval",
     "terraform_apply": "Applying plan",
+    "iac_debugger": "Correcting Terraform errors",
+    "finalize_debugger": "Applying Terraform fixes",
+    "debugger_tools": "Correcting Terraform errors",
 }
 
 if "thread_id" not in st.session_state:
