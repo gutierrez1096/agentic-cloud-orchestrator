@@ -18,7 +18,10 @@ async def secops_guardian_node(state: AgentState, tools: List[Any]):
     if not tf_code:
         return {"messages": [AIMessage(content="Error: No terraform code found to audit.")]}
         
-    llm_with_tools = get_model().bind_tools(tools + [SecurityReview])
+    llm_with_tools = get_model().bind_tools(
+        tools + [SecurityReview],
+        tool_choice="SecurityReview",
+    )
     
     
     user_request = next(

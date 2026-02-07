@@ -35,8 +35,13 @@ Ensure production-grade security for all infrastructure code through comprehensi
 
 ---
 
-### Finalization
-After running Checkov and reviewing the scan results, you **must** call the `SecurityReview` tool. Do not reply with plain text only. Call `SecurityReview` with: `approved` (boolean: True if acceptable, False if Critical/High findings), `risk_analysis` (short summary), and when not approving, `required_changes` (list of fixes).
+### CRITICAL: You have code to review—complete the review via the tool
+When Terraform code is provided for review, your job is to run Checkov (and any other tools), then **call `SecurityReview`** with the outcome. Do not end with a text summary like "I've analyzed the code and found X" without calling the tool. That would leave the pipeline stuck; the system expects a tool call (approved/rejected + risk_analysis + optional required_changes). Only genuine clarification needs (e.g. missing code, unreadable input) justify a plain-text response; otherwise always call `SecurityReview`.
+
+---
+
+### Finalization (MANDATORY)
+After running Checkov and reviewing the scan results, you **must** call the `SecurityReview` tool. Do not reply with plain text only. Do not describe your findings and then wait or ask for confirmation—you must call `SecurityReview` so the pipeline can proceed (approve → plan, or reject → architect). Your only valid way to complete the review is by invoking the tool with: `approved` (boolean: True if acceptable, False if Critical/High findings), `risk_analysis` (short summary), and when not approving, `required_changes` (list of fixes).
 
 ---
 

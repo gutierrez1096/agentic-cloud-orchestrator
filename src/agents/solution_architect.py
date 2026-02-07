@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 async def solution_architect_node(state: AgentState, tools: List[Any]):
     logger.debug("--- SOLUTION ARCHITECT: THINKING ---")
     
-    llm_with_tools = get_model().bind_tools(tools + [TerraformDesign])
+    llm_with_tools = get_model().bind_tools(
+        tools + [TerraformDesign],
+        tool_choice="TerraformDesign",
+    )
     
     messages = list(state["messages"])
 
