@@ -24,7 +24,7 @@ SUGGESTIONS = {
 }
 
 if "thread_id" not in st.session_state:
-    logger.info("Nueva sesión iniciada")
+    logger.debug("New session started")
     st.session_state.thread_id = str(uuid.uuid4())
 
 if "memory" not in st.session_state:
@@ -42,7 +42,7 @@ if "pending_approval" not in st.session_state:
 
 
 async def run_graph(inputs=None, resume=None):
-    """Ejecuta el grafo (inputs) o reanuda tras interrupt (resume). Retorna (state, interrupted)."""
+    """Runs the graph (inputs) or resumes after interrupt (resume). Returns (state, interrupted)."""
     graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
     config = {"configurable": {"thread_id": st.session_state.thread_id}}
     inp = Command(resume=resume) if resume else inputs
@@ -55,12 +55,12 @@ async def run_graph(inputs=None, resume=None):
 
 
 def _assistant_content_from_state(state):
-    """Construye el contenido markdown del mensaje asistente (rationale + plan) a partir del state."""
+    """Builds the assistant message markdown content (rationale + plan) from state."""
     rationale = state.get("architect_rationale", "")
     plan_output = state.get("plan_output", "")
     parts = []
     if rationale:
-        parts.append(f"### Rationale del Architect\n\n{rationale}")
+        parts.append(f"### Architect Rationale\n\n{rationale}")
     if plan_output:
         parts.append(f"### Terraform Plan Output\n\n```\n{plan_output}\n```")
     return "\n\n".join(parts) if parts else ""
@@ -139,11 +139,11 @@ for message in st.session_state.messages:
 if st.session_state.pending_approval:
     with st.chat_message("assistant"):
         with st.form("hitl"):
-            decision = st.radio("Decisión", ["Aprobar", "Rechazar", "Solicitar cambios"])
-            feedback = st.text_area("Cambios (opcional)")
-            submitted = st.form_submit_button("Enviar")
+            decision = st.radio("Decision", ["Approve", "Reject", "Request changes"])
+            feedback = st.text_area("Changes (optional)")
+            submitted = st.form_submit_button("Submit")
     if submitted:
-        type_map = {"Aprobar": "approve", "Rechazar": "reject", "Solicitar cambios": "revise"}
+        type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
         resume = {"type": type_map[decision], "feedback": feedback or ""}
         final_state, interrupted = asyncio.run(run_graph(resume=resume))
         st.session_state.pending_approval = False
@@ -157,12 +157,12 @@ if st.session_state.pending_approval:
                 apply_out = final_state.get("apply_output", "")
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": f"Plan aprobado.\n\n### Terraform Apply\n\n```\n{apply_out}\n```"
+                    "content": f"Plan approved.\n\n### Terraform Apply\n\n```\n{apply_out}\n```"
                 })
             else:
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": "Plan rechazado por el usuario."
+                    "content": "Plan rejected by user."
                 })
         st.rerun()
     st.stop()
@@ -200,18 +200,18 @@ if user_message:
 
                     rationale = final_state.get("architect_rationale", "")
                     if rationale:
-                        with st.expander("📋 Rationale del Architect", expanded=False):
+                        with st.expander("📋 Architect Rationale", expanded=False):
                             st.markdown(rationale)
 
                     created_files = final_state.get("created_files", [])
                     if created_files:
-                        with st.expander("📁 Archivos Creados", expanded=False):
+                        with st.expander("📁 Created Files", expanded=False):
                             for filename in created_files:
                                 st.text(f"• {filename}")
 
                     tf_code = final_state.get("terraform_code", {})
                     if tf_code:
-                        with st.expander("🛠️ Código Terraform", expanded=False):
+                        with st.expander("🛠️ Terraform Code", expanded=False):
                             if isinstance(tf_code, dict):
                                 for filename, file_content in tf_code.items():
                                     st.subheader(f"`{filename}`")

@@ -15,7 +15,7 @@ def get_model(model_name: str = "gpt-4.1-mini", timeout: int = 60):
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY no está definido. Configúralo en el entorno o en un fichero .env."
+            "OPENAI_API_KEY is not set. Configure it in the environment or in a .env file."
         )
 
     model = ChatOpenAI(

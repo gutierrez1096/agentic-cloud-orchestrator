@@ -11,7 +11,7 @@ from src.states.graph_state import AgentState
 logger = logging.getLogger(__name__)
 
 async def secops_guardian_node(state: AgentState, tools: List[Any]):
-    logger.info("--- SECOPS GUARDIAN: AUDITING CODE ---")
+    logger.debug("--- SECOPS GUARDIAN: AUDITING CODE ---")
     
     tf_code = state.get("terraform_code", {})
     
@@ -41,16 +41,16 @@ async def secops_guardian_node(state: AgentState, tools: List[Any]):
     response = await llm_with_tools.ainvoke(messages)
     
     if response.tool_calls:
-        logger.info(f"SecOps selected {len(response.tool_calls)} tool(s)")
+        logger.debug(f"SecOps selected {len(response.tool_calls)} tool(s)")
         for tool in response.tool_calls:
-            logger.info(f"Tool Request: {tool['name']} | Arguments: {json.dumps(tool['args'])}")
+            logger.debug(f"Tool Request: {tool['name']} | Arguments: {json.dumps(tool['args'])}")
     else:
-        logger.info("SecOps generated direct response")
+        logger.debug("SecOps generated direct response")
     
     return {"messages": [response]}
 
 def finalize_secops_review_node(state: AgentState):
-    logger.info("--- FINALIZING SECOPS REVIEW ---")
+    logger.debug("--- FINALIZING SECOPS REVIEW ---")
     messages = state.get("messages", [])
     
     last_message = messages[-1]
@@ -72,7 +72,10 @@ def finalize_secops_review_node(state: AgentState):
     risk_analysis = args.get("risk_analysis", "")
     required_changes = args.get("required_changes", [])
     
-    logger.info(f"Security Review approved={approved}")
+    if approved:
+        logger.debug(f"Security Review approved={approved}")
+    else:
+        logger.warning(f"Security Review approved={approved}")
     
     if approved:
         output_message = f"Security Review approved. {risk_analysis}"

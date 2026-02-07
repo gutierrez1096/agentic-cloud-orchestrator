@@ -24,7 +24,7 @@ def write_terraform_file(content: str, filename: str = "main.tf") -> str:
     file_path = os.path.join(INFRA_WORKSPACE, filename)
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
-    logger.info(f"Wrote Terraform file: {file_path}")
+    logger.debug(f"Wrote Terraform file: {file_path}")
     return f"Successfully wrote infrastructure code to {file_path}"
 
 
@@ -35,12 +35,12 @@ def execute_terraform_command(command: str, working_directory: str = INFRA_WORKS
     if not os.path.exists(working_directory):
         return f"Error: Working directory does not exist: {working_directory}"
 
-    logger.info(f"Terraform path: {TERRAFORM_PATH}")
+    logger.debug(f"Terraform path: {TERRAFORM_PATH}")
     
     normalized_command = command.replace("terraform ", "").strip()
     full_command = [TERRAFORM_PATH] + normalized_command.split()
 
-    logger.info(f"Executing Terraform command: {full_command}")
+    logger.debug(f"Executing Terraform command: {full_command}")
     
     try:
         result = subprocess.run(
@@ -80,7 +80,7 @@ def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = 
             timeout=10,
         )
         output = result.stdout.strip() or result.stderr.strip()
-        logger.info("Checkov executed successfully")
+        logger.debug("Checkov executed successfully")
         logger.debug(f"Checkov output: {output}")
         if not output:
             return "Checkov executed but produced no output (exit code: {}).".format(result.returncode)

@@ -24,7 +24,7 @@ MAX_REVIEW_ITERATIONS = 3
 
 
 def __architect_router(state):
-    """Router que decide el siguiente nodo después de solution_architect."""
+    """Router that decides the next node after solution_architect."""
     messages = state.get("messages", [])
 
     if not messages:
@@ -33,22 +33,22 @@ def __architect_router(state):
     last_message = messages[-1]
     
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls - volviendo a finalize_architecture")
+        logger.warning("No tool calls - returning to finalize_architecture")
         return "finalize_architecture"
         
     tool_name = last_message.tool_calls[0]["name"]
-    logger.info(f"Llamada a herramienta detectada: {tool_name}")
+    logger.debug(f"Tool call detected: {tool_name}")
     
     if tool_name == "TerraformDesign":
-        logger.info("Siguiente nodo: finalize_architecture")
+        logger.debug("Next node: finalize_architecture")
         return "finalize_architecture"
     else:
-        logger.info("Siguiente nodo: architect_tools")
+        logger.debug("Next node: architect_tools")
         return "architect_tools"
 
 
 def __secops_router(state):
-    """Router que decide el siguiente nodo después de secops_guardian."""
+    """Router that decides the next node after secops_guardian."""
     messages = state.get("messages", [])
 
     if not messages:
@@ -58,33 +58,33 @@ def __secops_router(state):
     last_message = messages[-1]
 
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls en SecOps - volviendo a finalize_secops_review")
+        logger.warning("No tool calls in SecOps - returning to finalize_secops_review")
         return "finalize_secops_review"
 
     tool_name = last_message.tool_calls[0]["name"]
-    logger.info(f"SecOps tool call detectado: {tool_name}")
+    logger.debug(f"SecOps tool call detected: {tool_name}")
 
     if tool_name == "SecurityReview":
-        logger.info("Siguiente nodo: finalize_secops_review")
+        logger.debug("Next node: finalize_secops_review")
         return "finalize_secops_review"
     else:
-        logger.info("Siguiente nodo: secops_tools")
+        logger.debug("Next node: secops_tools")
         return "secops_tools"
 
 
 def __after_init_router(state):
-    """Router después de terraform init: si OK → secops, si falló → solution_architect para corregir."""
+    """Router after terraform init: if OK → secops, if failed → solution_architect to fix."""
     if state.get("init_success", True):
-        logger.info("Terraform init OK. Proceeding to secops_guardian.")
+        logger.debug("Terraform init OK. Proceeding to secops_guardian.")
         return "secops_guardian"
     logger.warning("Terraform init failed. Returning to solution_architect to fix.")
     return "solution_architect"
 
 
 def __after_security_review_router(state):
-    """Router después de procesar SecurityReview."""
+    """Router after processing SecurityReview."""
     if state.get("is_approved"):
-        logger.info("Security approved. Proceeding to terraform plan.")
+        logger.debug("Security approved. Proceeding to terraform plan.")
         return "terraform_plan"
     
     iterations = state.get("review_iterations", 0)
@@ -92,25 +92,25 @@ def __after_security_review_router(state):
         logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform plan.")
         return "terraform_plan"
     
-    logger.info(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
+    logger.warning(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
     return "solution_architect"
 
 
 def __after_human_approval_router(state):
-    """Router después de human_approval: approve → terraform_apply, revise → architect, reject → END."""
+    """Router after human_approval: approve → terraform_apply, revise → architect, reject → END."""
     decision = state.get("human_decision", "reject")
     if decision == "approve":
-        logger.info("Human approved. Proceeding to terraform apply.")
+        logger.debug("Human approved. Proceeding to terraform apply.")
         return "terraform_apply"
     if decision == "revise":
-        logger.info("Human requested changes. Returning to solution_architect.")
+        logger.debug("Human requested changes. Returning to solution_architect.")
         return "solution_architect"
-    logger.info("Human rejected. Ending flow.")
+    logger.warning("Human rejected. Ending flow.")
     return END
 
 
 async def create_supervisor_graph(checkpointer=None):
-    logger.info("Creando grafo del supervisor...")
+    logger.debug("Creating supervisor graph...")
 
     architect_tools = await get_solution_architect_tools()
     secops_tools = await get_secops_guardian_tools()

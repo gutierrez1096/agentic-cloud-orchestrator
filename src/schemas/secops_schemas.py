@@ -3,13 +3,13 @@ from typing import List, Optional
 
 
 class SecurityReview(BaseModel):
-    """Resultado de la revisión de seguridad del código Terraform."""
+    """Result of the Terraform code security review."""
     approved: bool = Field(
         ...,
-        description="True si el código pasa la revisión (sin hallazgos Critical/High que obliguen a rechazar); False en caso contrario."
+        description="True if the code passes the review (no Critical/High findings that require rejection); False otherwise."
     )
     risk_analysis: str = Field(...)
     required_changes: Optional[List[str]] = Field(
         default=[],
-        description="Lista de cambios requeridos cuando approved=False."
+        description="List of required changes when approved=False."
     )

@@ -11,7 +11,7 @@ from src.states.graph_state import AgentState
 logger = logging.getLogger(__name__)
 
 async def solution_architect_node(state: AgentState, tools: List[Any]):
-    logger.info("--- SOLUTION ARCHITECT: THINKING ---")
+    logger.debug("--- SOLUTION ARCHITECT: THINKING ---")
     
     llm_with_tools = get_model().bind_tools(tools + [TerraformDesign])
     
@@ -30,16 +30,16 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
     response = await llm_with_tools.ainvoke(messages)
 
     if response.tool_calls:
-        logger.info(f"Model selected {len(response.tool_calls)} tool(s)")
+        logger.debug(f"Model selected {len(response.tool_calls)} tool(s)")
         for tool in response.tool_calls:
-            logger.info(f"Tool Request: {tool['name']} | Arguments: {json.dumps(tool['args'])}")
+            logger.debug(f"Tool Request: {tool['name']} | Arguments: {json.dumps(tool['args'])}")
     else:
-        logger.info("Model generated direct response")
+        logger.debug("Model generated direct response")
 
     return {"messages": [response]}
 
 def finalize_architecture_node(state: AgentState):
-    logger.info("--- FINALIZING ARCHITECTURE ---")
+    logger.debug("--- FINALIZING ARCHITECTURE ---")
     messages = state.get("messages", [])
 
     last_message = messages[-1]
@@ -61,7 +61,7 @@ def finalize_architecture_node(state: AgentState):
     
     created_files = list[Any](hcl_code.keys()) if hcl_code else []
     
-    logger.info(f"Arguments extracted - Files: {created_files}")
+    logger.debug(f"Arguments extracted - Files: {created_files}")
 
     output_message = f"Architecture design submitted successfully. Files to create: {', '.join(created_files)}. Writing to workspace before SecOps review."
     

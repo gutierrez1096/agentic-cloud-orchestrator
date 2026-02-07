@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def _get_log_level():
-    """Obtiene el nivel de logging desde LOG_LEVEL. Por defecto INFO."""
+    """Gets the logging level from LOG_LEVEL. Defaults to INFO."""
     log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
     
     level_mapping = {
@@ -23,8 +23,8 @@ def _get_log_level():
 
 def setup_logger(name: str = "agent_orchestrator"):
     """
-    Configura y devuelve un logger básico.
-    El nivel de logging se lee de la variable de entorno LOG_LEVEL (por defecto INFO).
+    Configures and returns a basic logger.
+    Log level is read from the LOG_LEVEL environment variable (default: INFO).
     """
     log_level = _get_log_level()
     root_logger = logging.getLogger()

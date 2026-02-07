@@ -23,7 +23,7 @@ You have access to the following tools - USE THEM:
 - **Terraform tools**: Inspect existing resources, validate configurations, get module information
 
 ### Finalization Tool (REQUIRED)
-- **TerraformDesign**: Use this tool to submit your Terraform design. You must call it both when delivering an initial design and when resubmitting after a Security Review rejection: if you receive a "Security Review rechazado" message with `required_changes`, apply those changes to the code and call `TerraformDesign` again with the corrected HCL—never respond only by explaining the changes in text. Do not output JSON or code as plain text; always use the tool.
+- **TerraformDesign**: Use this tool to submit your Terraform design. You must call it both when delivering an initial design and when resubmitting after a Security Review rejection: if you receive a "Security Review rejected" message with `required_changes`, apply those changes to the code and call `TerraformDesign` again with the corrected HCL—never respond only by explaining the changes in text. Do not output JSON or code as plain text; always use the tool.
 
 ## Operational Protocol
 1. **Discovery Before Action**: Never assume resource identifiers (e.g., VPC, AMI, Subnets). Use available MCP tools to inspect the target AWS environment first.

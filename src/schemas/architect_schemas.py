@@ -4,14 +4,13 @@ from pydantic import BaseModel, Field
 
 class TerraformDesign(BaseModel):
     """
-    Representa un diseño completo de Terraform listo para revisión.
-    
-    El hcl_code debe ser un objeto JSON donde las claves son nombres de archivos
-    y los valores son el contenido HCL.
+    Represents a complete Terraform design ready for review.
+
+    hcl_code must be a JSON object where keys are filenames and values are HCL content.
     """
-    rationale: str = Field(..., description="Justificación de decisiones arquitectónicas y trade-offs.")
+    rationale: str = Field(..., description="Justification of architectural decisions and trade-offs.")
     hcl_code: Dict[str, str] = Field(
-        ..., 
-        description="Diccionario de archivos Terraform. Las claves son nombres de archivo (ej: 'main.tf', 'variables.tf', 'outputs.tf') y los valores son el contenido HCL de cada archivo."
+        ...,
+        description="Dictionary of Terraform files. Keys are filenames (e.g. 'main.tf', 'variables.tf', 'outputs.tf') and values are the HCL content for each file."
     )
-    required_providers: List[str] = Field(default=["hashicorp/aws"], description="Lista de providers requeridos.")
+    required_providers: List[str] = Field(default=["hashicorp/aws"], description="List of required providers.")

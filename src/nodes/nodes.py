@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def apply_to_workspace_node(state: AgentState):
-    """Escribe el código Terraform al workspace."""
-    logger.info("--- WRITING FILES TO WORKSPACE ---")
+    """Writes Terraform code to the workspace."""
+    logger.debug("--- WRITING FILES TO WORKSPACE ---")
     tf_code = state.get("terraform_code", {})
     
     if not tf_code:
@@ -21,23 +21,23 @@ def apply_to_workspace_node(state: AgentState):
     results = []
     
     try:
-        logger.info(f"Writing {len(tf_code)} Terraform files to workspace")
+        logger.debug(f"Writing {len(tf_code)} Terraform files to workspace")
         for filename, content in tf_code.items():
             if not filename.endswith('.tf'):
                 logger.warning(f"File {filename} does not have .tf extension, skipping")
                 continue
             result = write_terraform_file.invoke({"content": content, "filename": filename})
             results.append(f"{filename}: {result}")
-        logger.info(f"Files written: {', '.join(results)}")
+        logger.debug(f"Files written: {', '.join(results)}")
     except Exception as e:
         logger.error(f"Error writing Terraform files: {e}")
     
-    logger.info("Terraform files written successfully")
+    logger.debug("Terraform files written successfully")
 
 
 def terraform_init_node(state: AgentState):
-    """Ejecuta terraform init en el workspace."""
-    logger.info("--- TERRAFORM INIT ---")
+    """Runs terraform init in the workspace."""
+    logger.debug("--- TERRAFORM INIT ---")
     errors = []
 
     def _is_success(result: str) -> bool:
@@ -48,13 +48,13 @@ def terraform_init_node(state: AgentState):
             "command": "fmt",
             "working_directory": INFRA_WORKSPACE
         })
-        logger.info(f"Terraform fmt completed: {fmt_result[:200]}...")
+        logger.debug(f"Terraform fmt completed: {fmt_result[:200]}...")
 
         init_result = execute_terraform_command.invoke({
             "command": "init",
             "working_directory": INFRA_WORKSPACE
         })
-        logger.info(f"Terraform init completed: {init_result[:200]}...")
+        logger.debug(f"Terraform init completed: {init_result[:200]}...")
         if not _is_success(init_result):
             errors.append(f"terraform init failed: {init_result}")
 
@@ -62,7 +62,7 @@ def terraform_init_node(state: AgentState):
             "command": "validate",
             "working_directory": INFRA_WORKSPACE
         })
-        logger.info(f"Terraform validate completed: {validate_result[:200]}...")
+        logger.debug(f"Terraform validate completed: {validate_result[:200]}...")
         if not _is_success(validate_result):
             errors.append(f"terraform validate failed: {validate_result}")
 
@@ -83,8 +83,8 @@ def terraform_init_node(state: AgentState):
 
 
 def terraform_plan_node(state: AgentState):
-    """Ejecuta terraform plan y retorna el output."""
-    logger.info("--- TERRAFORM PLAN ---")
+    """Runs terraform plan and returns the output."""
+    logger.debug("--- TERRAFORM PLAN ---")
     
     try:
         plan_result = execute_terraform_command.invoke({
@@ -98,7 +98,7 @@ def terraform_plan_node(state: AgentState):
             if ":\n" in plan_output:
                 plan_output = plan_output.split(":\n", 1)[1]
         
-        logger.info("Terraform plan completed")
+        logger.debug("Terraform plan completed")
         
         return {
             "plan_output": plan_output
@@ -113,7 +113,7 @@ def terraform_plan_node(state: AgentState):
 
 
 def human_approval_node(state: AgentState):
-    """Pausa el grafo para revision humana del terraform plan."""
+    """Pauses the graph for human review of the terraform plan."""
     decision = interrupt({})
 
     decision_type = decision.get("type", "reject")
@@ -122,15 +122,15 @@ def human_approval_node(state: AgentState):
     if decision_type == "revise":
         feedback = decision.get("feedback", "")
         updates["messages"] = [HumanMessage(
-            content=f"[HUMAN REVIEW] El usuario rechazo el plan y solicita cambios:\n\n{feedback}\n\nRevisa la arquitectura y genera un nuevo TerraformDesign."
+            content=f"[HUMAN REVIEW] The user rejected the plan and requested changes:\n\n{feedback}\n\nReview the architecture and generate a new TerraformDesign."
         )]
 
     return updates
 
 
 def terraform_apply_node(state: AgentState):
-    """Ejecuta terraform apply y retorna el output."""
-    logger.info("--- TERRAFORM APPLY ---")
+    """Runs terraform apply and returns the output."""
+    logger.debug("--- TERRAFORM APPLY ---")
 
     try:
         apply_result = execute_terraform_command.invoke({
@@ -144,7 +144,7 @@ def terraform_apply_node(state: AgentState):
             if ":\n" in apply_output:
                 apply_output = apply_output.split(":\n", 1)[1]
 
-        logger.info("Terraform apply completed")
+        logger.debug("Terraform apply completed")
         return {"apply_output": apply_output}
     except Exception as e:
         logger.error(f"Error executing terraform apply: {e}")
