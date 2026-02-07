@@ -1,4 +1,4 @@
-from typing import Annotated, List, TypedDict, Dict
+from typing import Annotated, List, Literal, TypedDict, Dict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -16,5 +16,5 @@ class AgentState(TypedDict):
     created_files: NotRequired[List[str]]
     review_iterations: NotRequired[int]
     init_success: NotRequired[bool]
-    human_decision: NotRequired[str]
+    human_decision: NotRequired[Literal["approve", "revise", "reject"]]
     apply_output: NotRequired[str]

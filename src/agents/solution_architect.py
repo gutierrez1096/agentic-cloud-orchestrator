@@ -59,7 +59,7 @@ def finalize_architecture_node(state: AgentState):
     hcl_code = design_args.get("hcl_code", {})
     rationale = design_args.get("rationale", "")
     
-    created_files = list[Any](hcl_code.keys()) if hcl_code else []
+    created_files = list(hcl_code.keys()) if hcl_code else []
     
     logger.debug(f"Arguments extracted - Files: {created_files}")
 

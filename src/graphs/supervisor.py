@@ -23,53 +23,40 @@ logger = logging.getLogger(__name__)
 MAX_REVIEW_ITERATIONS = 3
 
 
-def __architect_router(state):
-    """Router that decides the next node after solution_architect."""
+def _route_by_tool(state, mapping, default=END):
+    """Router that branches by the first tool call name in the last message.
+    mapping: dict tool_name -> node_name. If tool_name is in mapping, return that node; else return default.
+    """
     messages = state.get("messages", [])
-
     if not messages:
         return END
-    
     last_message = messages[-1]
-    
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.debug("No tool calls - ending turn so user sees architect text response")
+        logger.debug("No tool calls - ending turn")
         return END
-        
     tool_name = last_message.tool_calls[0]["name"]
     logger.debug(f"Tool call detected: {tool_name}")
-    
-    if tool_name == "TerraformDesign":
-        logger.debug("Next node: finalize_architecture")
-        return "finalize_architecture"
-    else:
-        logger.debug("Next node: architect_tools")
-        return "architect_tools"
+    next_node = mapping.get(tool_name, default)
+    logger.debug(f"Next node: {next_node}")
+    return next_node
+
+
+def __architect_router(state):
+    """Router that decides the next node after solution_architect."""
+    return _route_by_tool(
+        state,
+        mapping={"TerraformDesign": "finalize_architecture"},
+        default="architect_tools",
+    )
 
 
 def __secops_router(state):
     """Router that decides the next node after secops_guardian."""
-    messages = state.get("messages", [])
-
-    if not messages:
-        logger.error("No messages found in SecOps router")
-        return END
-
-    last_message = messages[-1]
-
-    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.debug("No tool calls in SecOps - ending turn so user sees SecOps text response")
-        return END
-
-    tool_name = last_message.tool_calls[0]["name"]
-    logger.debug(f"SecOps tool call detected: {tool_name}")
-
-    if tool_name == "SecurityReview":
-        logger.debug("Next node: finalize_secops_review")
-        return "finalize_secops_review"
-    else:
-        logger.debug("Next node: secops_tools")
-        return "secops_tools"
+    return _route_by_tool(
+        state,
+        mapping={"SecurityReview": "finalize_secops_review"},
+        default="secops_tools",
+    )
 
 
 def __after_init_router(state):

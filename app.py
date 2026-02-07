@@ -1,5 +1,6 @@
 import streamlit as st
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
 from langgraph.types import Command
 from src.graphs.supervisor import create_supervisor_graph
 from langgraph.checkpoint.memory import MemorySaver
@@ -178,7 +179,7 @@ if user_message:
     with st.chat_message("assistant"):
         with st.spinner("Architecting..."):
             config = {"configurable": {"thread_id": st.session_state.thread_id}}
-            inputs = {"messages": [HumanMessage(content=user_message)]}
+            inputs = {"messages": [SystemMessage(content=ARCHITECT_SYSTEM_PROMPT), HumanMessage(content=user_message)]}
 
             try:
                 final_state, interrupted = asyncio.run(run_graph(inputs=inputs))
@@ -202,6 +203,18 @@ if user_message:
                     if rationale:
                         with st.expander("📋 Architect Rationale", expanded=False):
                             st.markdown(rationale)
+
+                    architect_errors = final_state.get("architect_errors", [])
+                    if architect_errors:
+                        with st.expander("⚠️ Architect Errors", expanded=True):
+                            for err in architect_errors:
+                                st.text(f"• {err}")
+
+                    security_errors = final_state.get("security_errors", [])
+                    if security_errors:
+                        with st.expander("⚠️ Security Errors", expanded=True):
+                            for err in security_errors:
+                                st.text(f"• {err}")
 
                     created_files = final_state.get("created_files", [])
                     if created_files:
