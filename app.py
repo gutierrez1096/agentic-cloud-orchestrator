@@ -162,14 +162,14 @@ for i, message in enumerate(messages):
         st.markdown(message["content"])
         if message.get("role") == "assistant":
             if message.get("plan_output"):
-                with st.expander("Plan output (completo)", expanded=False):
+                with st.expander("Plan output (complete)", expanded=False):
                     st.code(message["plan_output"], language="text")
             if message.get("apply_summary") or message.get("apply_output"):
                 st.markdown("Plan aplicado.")
                 if message.get("apply_summary"):
                     st.markdown(f"**Apply summary:** {message['apply_summary']}")
                 if message.get("apply_output"):
-                    with st.expander("Apply output (completo)", expanded=False):
+                    with st.expander("Apply output (complete)", expanded=False):
                         st.code(message["apply_output"], language="text")
             if message.get("rejected"):
                 st.markdown("Plan rechazado.")

@@ -33,14 +33,11 @@ async def secops_guardian_node(state: AgentState, tools: List[Any]):
         f"#### {filename}\n```hcl\n{content}\n```" for filename, content in tf_code.items()
     )
     
-    messages = state["messages"]
     system_msg = SystemMessage(content=SECOPS_SYSTEM_PROMPT.format(
         user_request=user_request,
         terraform_code=tf_code_formatted
     ))
-    if not isinstance(messages[0], SystemMessage):
-        messages = [system_msg] + messages
-    
+    messages = [system_msg, HumanMessage(content=user_request)]
     response = await llm_with_tools.ainvoke(messages)
     
     if response.tool_calls:
