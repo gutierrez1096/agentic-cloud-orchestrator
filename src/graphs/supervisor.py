@@ -33,8 +33,8 @@ def __architect_router(state):
     last_message = messages[-1]
     
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls - returning to finalize_architecture")
-        return "finalize_architecture"
+        logger.debug("No tool calls - ending turn so user sees architect text response")
+        return END
         
     tool_name = last_message.tool_calls[0]["name"]
     logger.debug(f"Tool call detected: {tool_name}")
@@ -58,8 +58,8 @@ def __secops_router(state):
     last_message = messages[-1]
 
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls in SecOps - returning to finalize_secops_review")
-        return "finalize_secops_review"
+        logger.debug("No tool calls in SecOps - ending turn so user sees SecOps text response")
+        return END
 
     tool_name = last_message.tool_calls[0]["name"]
     logger.debug(f"SecOps tool call detected: {tool_name}")
