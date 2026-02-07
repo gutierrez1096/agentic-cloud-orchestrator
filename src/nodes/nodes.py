@@ -17,6 +17,22 @@ def _is_terraform_success(result: str) -> bool:
     return "Success" in result and "Exit code:" not in result
 
 
+def _apply_summary_from_output(apply_output: str, apply_success: bool) -> str:
+    """Extrae el resumen del apply desde la salida (éxito: 'Apply complete!...'; error: 'Error:...')."""
+    if not apply_output:
+        return ""
+    lines = [ln.strip() for ln in apply_output.splitlines() if ln.strip()]
+    if apply_success:
+        for line in reversed(lines):
+            if "Apply complete!" in line or ("Resources:" in line and "added" in line):
+                return line
+        return ""
+    for line in lines:
+        if line.startswith("Error:"):
+            return line[:200]
+    return (lines[-1][:200] if lines else "")
+
+
 def _plan_summary_from_json(workspace: str) -> str:
     """Resumen Add/Change/Delete desde terraform show -json tfplan."""
     plan_path = os.path.join(workspace, "tfplan")
@@ -163,11 +179,13 @@ def terraform_apply_node(state: AgentState):
             if ":\n" in apply_output:
                 apply_output = apply_output.split(":\n", 1)[1]
         apply_success = _is_terraform_success(apply_result)
-        apply_summary = state.get("plan_summary", "") or "Applied."
+        apply_summary = _apply_summary_from_output(apply_output, apply_success)
+        if not apply_summary:
+            apply_summary = state.get("plan_summary", "") or "Applied." if apply_success else "Apply failed."
         updates = {"apply_output": apply_output, "apply_summary": apply_summary, "apply_success": apply_success}
         if apply_success:
             updates["debugger_apply_attempts"] = 0
         return updates
     except Exception as e:
         logger.error(f"Error executing terraform apply: {e}")
-        return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": "", "apply_success": False}
+        return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": str(e)[:200], "apply_success": False}
