@@ -15,7 +15,7 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
     
     llm_with_tools = get_model().bind_tools(
         tools + [TerraformDesign],
-        tool_choice="TerraformDesign",
+        tool_choice="auto",
     )
     
     messages = list(state["messages"])
@@ -40,11 +40,7 @@ async def solution_architect_node(state: AgentState, tools: List[Any]):
         logger.debug("Model generated direct response")
 
     return {
-        "messages": [response],
-        "review_iterations": 0,
-        "debugger_init_attempts": 0,
-        "debugger_plan_attempts": 0,
-        "debugger_apply_attempts": 0,
+        "messages": [response]
     }
 
 def finalize_architecture_node(state: AgentState):

@@ -56,7 +56,7 @@ async def iac_debugger_node(state: AgentState, tools: List[Any]):
     ]
     llm_with_tools = get_model().bind_tools(
         tools + [TerraformFix],
-        tool_choice="TerraformFix",
+        tool_choice="auto",
     )
     response = await llm_with_tools.ainvoke(messages)
 

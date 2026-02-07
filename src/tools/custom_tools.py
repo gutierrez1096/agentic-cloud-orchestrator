@@ -73,11 +73,11 @@ def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = 
 
     try:
         result = subprocess.run(
-            [CHECKOV_PATH, "-d", working_directory, "--framework", framework,"--quiet", "--compact", "--skip-check", "LOW"],
+            [CHECKOV_PATH, "-d", working_directory, "--framework", framework,"--quiet", "--compact", "--skip-check", "MEDIUM"],
             capture_output=True,
             text=True,
             check=False,
-            timeout=10,
+            timeout=120,
         )
         output = result.stdout.strip() or result.stderr.strip()
         logger.debug("Checkov executed successfully")

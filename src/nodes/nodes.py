@@ -71,13 +71,13 @@ def terraform_init_node(state: AgentState):
 
     try:
         fmt_result = execute_terraform_command.invoke({
-            "command": "fmt",
+            "command": "fmt -no-color",
             "working_directory": INFRA_WORKSPACE
         })
         logger.debug(f"Terraform fmt completed: {fmt_result[:200]}...")
 
         init_result = execute_terraform_command.invoke({
-            "command": "init",
+            "command": "init -no-color",
             "working_directory": INFRA_WORKSPACE
         })
         logger.debug(f"Terraform init completed: {init_result[:200]}...")
@@ -85,7 +85,7 @@ def terraform_init_node(state: AgentState):
             errors.append(f"terraform init failed: {init_result}")
 
         validate_result = execute_terraform_command.invoke({
-            "command": "validate",
+            "command": "validate -no-color",
             "working_directory": INFRA_WORKSPACE
         })
         logger.debug(f"Terraform validate completed: {validate_result[:200]}...")

@@ -20,7 +20,7 @@ async def secops_guardian_node(state: AgentState, tools: List[Any]):
         
     llm_with_tools = get_model().bind_tools(
         tools + [SecurityReview],
-        tool_choice="SecurityReview",
+        tool_choice="auto",
     )
     
     
@@ -37,7 +37,11 @@ async def secops_guardian_node(state: AgentState, tools: List[Any]):
         user_request=user_request,
         terraform_code=tf_code_formatted
     ))
-    messages = [system_msg, HumanMessage(content=user_request)]
+    messages = list(state["messages"])
+    if not messages or not isinstance(messages[0], SystemMessage):
+        messages = [system_msg] + messages
+    else:
+        messages = [system_msg] + messages[1:]
     response = await llm_with_tools.ainvoke(messages)
     
     if response.tool_calls:

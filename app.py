@@ -4,6 +4,7 @@ from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
 from langgraph.types import Command
 from src.graphs.supervisor import create_supervisor_graph
 from langgraph.checkpoint.memory import MemorySaver
+from langfuse.langchain import CallbackHandler
 import uuid
 import asyncio
 from dotenv import load_dotenv
@@ -14,6 +15,8 @@ import json
 
 load_dotenv()
 logger = setup_logger()
+
+langfuse_handler = CallbackHandler()
 
 st.set_page_config(page_title="AWS IaC Agent", page_icon="🏗️", layout="centered")
 
@@ -62,7 +65,10 @@ if "applying" not in st.session_state:
 async def run_graph(inputs=None, resume=None, step_placeholder=None):
     """Runs the graph (inputs) or resumes after interrupt (resume). Returns (state, interrupted)."""
     graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
-    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+    config = {
+        "configurable": {"thread_id": st.session_state.thread_id},
+        "callbacks": [langfuse_handler],
+    }
     inp = Command(resume=resume) if resume else inputs
     if step_placeholder is not None:
         async for event in graph.astream(inp, config, stream_mode="updates"):
