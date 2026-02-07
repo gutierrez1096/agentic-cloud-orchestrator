@@ -13,7 +13,9 @@ from src.tools.mcp_tools import get_secops_guardian_tools, get_solution_architec
 from src.nodes.nodes import (
     apply_to_workspace_node,
     terraform_init_node,
-    terraform_plan_node
+    terraform_plan_node,
+    human_approval_node,
+    terraform_apply_node,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,8 +33,8 @@ def __architect_router(state):
     last_message = messages[-1]
     
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls - respuesta directa del modelo")
-        return END
+        logger.warning("No tool calls - volviendo a finalize_architecture")
+        return "finalize_architecture"
         
     tool_name = last_message.tool_calls[0]["name"]
     logger.info(f"Llamada a herramienta detectada: {tool_name}")
@@ -56,8 +58,8 @@ def __secops_router(state):
     last_message = messages[-1]
 
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
-        logger.warning("No tool calls en SecOps - volviendo a secops_guardian")
-        return "secops_guardian"
+        logger.warning("No tool calls en SecOps - volviendo a finalize_secops_review")
+        return "finalize_secops_review"
 
     tool_name = last_message.tool_calls[0]["name"]
     logger.info(f"SecOps tool call detectado: {tool_name}")
@@ -94,6 +96,19 @@ def __after_security_review_router(state):
     return "solution_architect"
 
 
+def __after_human_approval_router(state):
+    """Router después de human_approval: approve → terraform_apply, revise → architect, reject → END."""
+    decision = state.get("human_decision", "reject")
+    if decision == "approve":
+        logger.info("Human approved. Proceeding to terraform apply.")
+        return "terraform_apply"
+    if decision == "revise":
+        logger.info("Human requested changes. Returning to solution_architect.")
+        return "solution_architect"
+    logger.info("Human rejected. Ending flow.")
+    return END
+
+
 async def create_supervisor_graph(checkpointer=None):
     logger.info("Creando grafo del supervisor...")
 
@@ -112,6 +127,8 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_node("apply_to_workspace", apply_to_workspace_node)
     builder.add_node("terraform_init", terraform_init_node)
     builder.add_node("terraform_plan", terraform_plan_node)
+    builder.add_node("human_approval", human_approval_node)
+    builder.add_node("terraform_apply", terraform_apply_node)
 
     builder.set_entry_point("solution_architect")
 
@@ -159,6 +176,16 @@ async def create_supervisor_graph(checkpointer=None):
             "solution_architect": "solution_architect",
         }
     )
-    builder.add_edge("terraform_plan", END)
+    builder.add_edge("terraform_plan", "human_approval")
+    builder.add_conditional_edges(
+        "human_approval",
+        __after_human_approval_router,
+        {
+            "terraform_apply": "terraform_apply",
+            "solution_architect": "solution_architect",
+            END: END,
+        }
+    )
+    builder.add_edge("terraform_apply", END)
 
     return builder.compile(checkpointer=checkpointer)

@@ -1,6 +1,7 @@
 from src.states.graph_state import AgentState
 from src.tools.custom_tools import write_terraform_file, execute_terraform_command
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import ToolMessage, HumanMessage
+from langgraph.types import interrupt
 import logging
 
 from src.config import INFRA_WORKSPACE
@@ -109,3 +110,42 @@ def terraform_plan_node(state: AgentState):
         return {
             "plan_output": plan_result
         }
+
+
+def human_approval_node(state: AgentState):
+    """Pausa el grafo para revision humana del terraform plan."""
+    decision = interrupt({})
+
+    decision_type = decision.get("type", "reject")
+    updates = {"human_decision": decision_type}
+
+    if decision_type == "revise":
+        feedback = decision.get("feedback", "")
+        updates["messages"] = [HumanMessage(
+            content=f"[HUMAN REVIEW] El usuario rechazo el plan y solicita cambios:\n\n{feedback}\n\nRevisa la arquitectura y genera un nuevo TerraformDesign."
+        )]
+
+    return updates
+
+
+def terraform_apply_node(state: AgentState):
+    """Ejecuta terraform apply y retorna el output."""
+    logger.info("--- TERRAFORM APPLY ---")
+
+    try:
+        apply_result = execute_terraform_command.invoke({
+            "command": "apply -auto-approve -no-color -input=false",
+            "working_directory": INFRA_WORKSPACE
+        })
+
+        apply_output = apply_result
+        if "Terraform command execution" in apply_result:
+            apply_output = apply_result.split("Terraform command execution", 1)[-1]
+            if ":\n" in apply_output:
+                apply_output = apply_output.split(":\n", 1)[1]
+
+        logger.info("Terraform apply completed")
+        return {"apply_output": apply_output}
+    except Exception as e:
+        logger.error(f"Error executing terraform apply: {e}")
+        return {"apply_output": f"Error executing terraform apply: {str(e)}"}

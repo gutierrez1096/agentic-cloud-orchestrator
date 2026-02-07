@@ -16,3 +16,5 @@ class AgentState(TypedDict):
     created_files: NotRequired[List[str]]
     review_iterations: NotRequired[int]
     init_success: NotRequired[bool]
+    human_decision: NotRequired[str]
+    apply_output: NotRequired[str]

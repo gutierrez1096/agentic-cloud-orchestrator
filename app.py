@@ -1,5 +1,6 @@
 import streamlit as st
 from langchain_core.messages import HumanMessage
+from langgraph.types import Command
 from src.graphs.supervisor import create_supervisor_graph
 from langgraph.checkpoint.memory import MemorySaver
 import uuid
@@ -36,6 +37,34 @@ if "initial_question" not in st.session_state:
     st.session_state.initial_question = None
 if "selected_suggestion" not in st.session_state:
     st.session_state.selected_suggestion = None
+if "pending_approval" not in st.session_state:
+    st.session_state.pending_approval = False
+
+
+async def run_graph(inputs=None, resume=None):
+    """Ejecuta el grafo (inputs) o reanuda tras interrupt (resume). Retorna (state, interrupted)."""
+    graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
+    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+    inp = Command(resume=resume) if resume else inputs
+    result = None
+    async for event in graph.astream(inp, config, stream_mode="values"):
+        result = event
+    snapshot = await graph.aget_state(config)
+    interrupted = bool(snapshot.interrupts)
+    return result, interrupted
+
+
+def _assistant_content_from_state(state):
+    """Construye el contenido markdown del mensaje asistente (rationale + plan) a partir del state."""
+    rationale = state.get("architect_rationale", "")
+    plan_output = state.get("plan_output", "")
+    parts = []
+    if rationale:
+        parts.append(f"### Rationale del Architect\n\n{rationale}")
+    if plan_output:
+        parts.append(f"### Terraform Plan Output\n\n```\n{plan_output}\n```")
+    return "\n\n".join(parts) if parts else ""
+
 
 st.html(div(style=styles(font_size=rem(5), line_height=1))["✈"])
 
@@ -56,6 +85,7 @@ with title_row:
         st.session_state.messages = []
         st.session_state.initial_question = None
         st.session_state.selected_suggestion = None
+        st.session_state.pending_approval = False
         st.session_state.thread_id = str(uuid.uuid4())
         st.session_state.memory = MemorySaver()
 
@@ -106,56 +136,79 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+if st.session_state.pending_approval:
+    with st.chat_message("assistant"):
+        with st.form("hitl"):
+            decision = st.radio("Decisión", ["Aprobar", "Rechazar", "Solicitar cambios"])
+            feedback = st.text_area("Cambios (opcional)")
+            submitted = st.form_submit_button("Enviar")
+    if submitted:
+        type_map = {"Aprobar": "approve", "Rechazar": "reject", "Solicitar cambios": "revise"}
+        resume = {"type": type_map[decision], "feedback": feedback or ""}
+        final_state, interrupted = asyncio.run(run_graph(resume=resume))
+        st.session_state.pending_approval = False
+        if interrupted:
+            content = _assistant_content_from_state(final_state)
+            if content:
+                st.session_state.messages.append({"role": "assistant", "content": content})
+            st.session_state.pending_approval = True
+        else:
+            if resume["type"] == "approve":
+                apply_out = final_state.get("apply_output", "")
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": f"Plan aprobado.\n\n### Terraform Apply\n\n```\n{apply_out}\n```"
+                })
+            else:
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": "Plan rechazado por el usuario."
+                })
+        st.rerun()
+    st.stop()
+
 if user_message:
     st.session_state.messages.append({"role": "user", "content": user_message})
     with st.chat_message("user"):
         st.markdown(user_message)
-    
+
     st.session_state.initial_question = None
     st.session_state.selected_suggestion = None
 
     with st.chat_message("assistant"):
         with st.spinner("Architecting..."):
-            config = {
-                "configurable": {"thread_id": st.session_state.thread_id},
-                # "recursion_limit": 15
-                }
-                
+            config = {"configurable": {"thread_id": st.session_state.thread_id}}
             inputs = {"messages": [HumanMessage(content=user_message)]}
-            
-            final_state = None
-            
-            async def run():
-                supervisor_graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
-                
-                result = None
-                async for event in supervisor_graph.astream(inputs, config, stream_mode="values"):
-                    result = event
-                return result
 
             try:
-                final_state = asyncio.run(run())
-                
-                if final_state:
+                final_state, interrupted = asyncio.run(run_graph(inputs=inputs))
+
+                if interrupted:
+                    content = _assistant_content_from_state(final_state)
+                    if content:
+                        st.session_state.messages.append({"role": "assistant", "content": content})
+                    st.session_state.pending_approval = True
+                    st.rerun()
+                elif final_state:
                     messages = final_state.get("messages", [])
                     content = ""
                     if messages:
                         last_msg = messages[-1]
-                        content = last_msg.content
+                        content = last_msg.content or ""
                         if content:
                             st.markdown(content)
-                    
+
                     rationale = final_state.get("architect_rationale", "")
                     if rationale:
                         with st.expander("📋 Rationale del Architect", expanded=False):
                             st.markdown(rationale)
-                    
+
                     created_files = final_state.get("created_files", [])
                     if created_files:
                         with st.expander("📁 Archivos Creados", expanded=False):
                             for filename in created_files:
                                 st.text(f"• {filename}")
-                    
+
                     tf_code = final_state.get("terraform_code", {})
                     if tf_code:
                         with st.expander("🛠️ Código Terraform", expanded=False):
@@ -174,20 +227,17 @@ if user_message:
                                         st.code(tf_code, language="hcl")
                                 except json.JSONDecodeError:
                                     st.code(tf_code, language="hcl")
-                    
+
                     plan_output = final_state.get("plan_output", "")
                     if plan_output:
                         st.subheader("📊 Terraform Plan Output")
                         st.code(plan_output, language="text")
                         plan_block = f"### 📊 Terraform Plan Output\n```\n{plan_output}\n```"
-                        if content:
-                            content = f"{content}\n\n{plan_block}"
-                        else:
-                            content = plan_block
+                        content = f"{content}\n\n{plan_block}" if content else plan_block
 
                     if content:
                         st.session_state.messages.append({"role": "assistant", "content": content})
-            
+
             except Exception as e:
                 st.error(f"An error occurred during architecting: {e}")
                 logger.error(f"Error executing graph: {e}")
