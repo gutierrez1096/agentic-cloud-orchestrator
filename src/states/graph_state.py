@@ -8,6 +8,8 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     terraform_code: NotRequired[Dict[str, str]]
     plan_output: NotRequired[str]
+    plan_summary: NotRequired[str]
+    apply_summary: NotRequired[str]
     is_approved: NotRequired[bool]
     workspace_errors: NotRequired[List[str]]
     architect_rationale: NotRequired[str]

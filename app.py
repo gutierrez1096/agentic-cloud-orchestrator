@@ -56,14 +56,13 @@ async def run_graph(inputs=None, resume=None):
 
 
 def _assistant_content_from_state(state):
-    """Builds the assistant message markdown content (rationale + plan) from state."""
     rationale = state.get("architect_rationale", "")
-    plan_output = state.get("plan_output", "")
+    plan_summary = state.get("plan_summary", "")
     parts = []
     if rationale:
         parts.append(f"### Architect Rationale\n\n{rationale}")
-    if plan_output:
-        parts.append(f"### Terraform Plan Output\n\n```\n{plan_output}\n```")
+    if plan_summary:
+        parts.append(f"**Plan summary:** {plan_summary}")
     return "\n\n".join(parts) if parts else ""
 
 
@@ -136,6 +135,13 @@ if not user_message:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        if message.get("role") == "assistant":
+            if message.get("plan_output"):
+                with st.expander("Plan output (completo)", expanded=False):
+                    st.code(message["plan_output"], language="text")
+            if message.get("apply_output"):
+                with st.expander("Apply output (completo)", expanded=False):
+                    st.code(message["apply_output"], language="text")
 
 if st.session_state.pending_approval:
     with st.chat_message("assistant"):
@@ -151,14 +157,23 @@ if st.session_state.pending_approval:
         if interrupted:
             content = _assistant_content_from_state(final_state)
             if content:
-                st.session_state.messages.append({"role": "assistant", "content": content})
+                msg = {"role": "assistant", "content": content}
+                if final_state.get("plan_output"):
+                    msg["plan_summary"] = final_state.get("plan_summary", "")
+                    msg["plan_output"] = final_state["plan_output"]
+                st.session_state.messages.append(msg)
             st.session_state.pending_approval = True
         else:
             if resume["type"] == "approve":
+                apply_summary = final_state.get("apply_summary", "")
                 apply_out = final_state.get("apply_output", "")
                 st.session_state.messages.append({
                     "role": "assistant",
-                    "content": f"Plan approved.\n\n### Terraform Apply\n\n```\n{apply_out}\n```"
+                    "content": f"Plan approved.\n\n**Apply summary:** {apply_summary}",
+                    "plan_summary": final_state.get("plan_summary", ""),
+                    "plan_output": final_state.get("plan_output", ""),
+                    "apply_summary": apply_summary,
+                    "apply_output": apply_out or "",
                 })
             else:
                 st.session_state.messages.append({
@@ -187,7 +202,11 @@ if user_message:
                 if interrupted:
                     content = _assistant_content_from_state(final_state)
                     if content:
-                        st.session_state.messages.append({"role": "assistant", "content": content})
+                        msg = {"role": "assistant", "content": content}
+                        if final_state.get("plan_output"):
+                            msg["plan_summary"] = final_state.get("plan_summary", "")
+                            msg["plan_output"] = final_state["plan_output"]
+                        st.session_state.messages.append(msg)
                     st.session_state.pending_approval = True
                     st.rerun()
                 elif final_state:
@@ -196,8 +215,8 @@ if user_message:
                     if messages:
                         last_msg = messages[-1]
                         content = last_msg.content or ""
-                        if content:
-                            st.markdown(content)
+                    if content:
+                        st.markdown(content)
 
                     rationale = final_state.get("architect_rationale", "")
                     if rationale:
@@ -229,15 +248,30 @@ if user_message:
                                 except json.JSONDecodeError:
                                     st.code(tf_code, language="hcl")
 
+                    plan_summary = final_state.get("plan_summary", "")
                     plan_output = final_state.get("plan_output", "")
+                    apply_summary = final_state.get("apply_summary", "")
+                    apply_output = final_state.get("apply_output", "")
+                    if plan_summary:
+                        st.markdown(f"**Plan summary:** {plan_summary}")
                     if plan_output:
-                        st.subheader("📊 Terraform Plan Output")
-                        st.code(plan_output, language="text")
-                        plan_block = f"### 📊 Terraform Plan Output\n```\n{plan_output}\n```"
-                        content = f"{content}\n\n{plan_block}" if content else plan_block
+                        with st.expander("Plan output (completo)", expanded=False):
+                            st.code(plan_output, language="text")
+                    if apply_summary:
+                        st.markdown(f"**Apply summary:** {apply_summary}")
+                    if apply_output:
+                        with st.expander("Apply output (completo)", expanded=False):
+                            st.code(apply_output, language="text")
 
-                    if content:
-                        st.session_state.messages.append({"role": "assistant", "content": content})
+                    if content or plan_summary or apply_summary:
+                        msg = {"role": "assistant", "content": content or f"**Plan summary:** {plan_summary}\n\n**Apply summary:** {apply_summary}"}
+                        if plan_output:
+                            msg["plan_summary"] = plan_summary
+                            msg["plan_output"] = plan_output
+                        if apply_output:
+                            msg["apply_summary"] = apply_summary
+                            msg["apply_output"] = apply_output
+                        st.session_state.messages.append(msg)
 
             except Exception as e:
                 st.error(f"An error occurred during architecting: {e}")

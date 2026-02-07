@@ -1,12 +1,36 @@
-from src.states.graph_state import AgentState
-from src.tools.custom_tools import write_terraform_file, execute_terraform_command
+import json
+import logging
+import os
+
 from langchain_core.messages import ToolMessage, HumanMessage
 from langgraph.types import interrupt
-import logging
 
 from src.config import INFRA_WORKSPACE
+from src.states.graph_state import AgentState
+from src.tools.custom_tools import write_terraform_file, execute_terraform_command
 
 logger = logging.getLogger(__name__)
+
+
+def _plan_summary_from_json(workspace: str) -> str:
+    """Resumen Add/Change/Delete desde terraform show -json tfplan."""
+    plan_path = os.path.join(workspace, "tfplan")
+    if not os.path.exists(plan_path):
+        return ""
+    try:
+        raw = execute_terraform_command.invoke({"command": "show -json tfplan", "working_directory": workspace})
+        if ":\n" in raw:
+            raw = raw.split(":\n", 1)[1]
+        data = json.loads(raw)
+        cambios = data.get("resource_changes", [])
+        detalles = [str(c.get("change", {}).get("actions", [])) for c in cambios]
+        add = sum(1 for x in detalles if "create" in x)
+        change = sum(1 for x in detalles if "update" in x)
+        delete = sum(1 for x in detalles if "delete" in x)
+        return f"Add: {add}, Change: {change}, Delete: {delete}"
+    except Exception as e:
+        logger.debug(f"Could not build plan summary: {e}")
+        return ""
 
 
 def apply_to_workspace_node(state: AgentState):
@@ -83,33 +107,23 @@ def terraform_init_node(state: AgentState):
 
 
 def terraform_plan_node(state: AgentState):
-    """Runs terraform plan and returns the output."""
+    """Runs terraform plan -out=tfplan and returns output + summary."""
     logger.debug("--- TERRAFORM PLAN ---")
-    
     try:
         plan_result = execute_terraform_command.invoke({
-            "command": "plan -no-color -input=false",
+            "command": "plan -no-color -input=false -out=tfplan",
             "working_directory": INFRA_WORKSPACE
         })
-        
         plan_output = plan_result
         if "Terraform command execution" in plan_result:
             plan_output = plan_result.split("Terraform command execution", 1)[-1]
             if ":\n" in plan_output:
                 plan_output = plan_output.split(":\n", 1)[1]
-        
-        logger.debug("Terraform plan completed")
-        
-        return {
-            "plan_output": plan_output
-        }
+        plan_summary = _plan_summary_from_json(INFRA_WORKSPACE)
+        return {"plan_output": plan_output, "plan_summary": plan_summary or ""}
     except Exception as e:
         logger.error(f"Error executing terraform plan: {e}")
-        plan_result = f"Error executing terraform plan: {str(e)}"
-        
-        return {
-            "plan_output": plan_result
-        }
+        return {"plan_output": f"Error executing terraform plan: {str(e)}", "plan_summary": ""}
 
 
 def human_approval_node(state: AgentState):
@@ -129,23 +143,20 @@ def human_approval_node(state: AgentState):
 
 
 def terraform_apply_node(state: AgentState):
-    """Runs terraform apply and returns the output."""
+    """Runs terraform apply tfplan and returns output + summary (from plan)."""
     logger.debug("--- TERRAFORM APPLY ---")
-
     try:
         apply_result = execute_terraform_command.invoke({
-            "command": "apply -auto-approve -no-color -input=false",
+            "command": "apply -auto-approve -no-color tfplan",
             "working_directory": INFRA_WORKSPACE
         })
-
         apply_output = apply_result
         if "Terraform command execution" in apply_result:
             apply_output = apply_result.split("Terraform command execution", 1)[-1]
             if ":\n" in apply_output:
                 apply_output = apply_output.split(":\n", 1)[1]
-
-        logger.debug("Terraform apply completed")
-        return {"apply_output": apply_output}
+        apply_summary = state.get("plan_summary", "") or "Applied."
+        return {"apply_output": apply_output, "apply_summary": apply_summary}
     except Exception as e:
         logger.error(f"Error executing terraform apply: {e}")
-        return {"apply_output": f"Error executing terraform apply: {str(e)}"}
+        return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": ""}
