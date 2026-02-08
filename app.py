@@ -40,24 +40,25 @@ NODE_LABELS = {
     "debugger_tools": "Correcting Terraform errors",
 }
 
-if "thread_id" not in st.session_state:
-    logger.debug("New session started")
-    st.session_state.thread_id = str(uuid.uuid4())
+def _init_session_state():
+    """Inicializa todas las claves de session_state en un solo lugar (recomendado por Streamlit)."""
+    defaults = {
+        "thread_id": str(uuid.uuid4()),
+        "memory": MemorySaver(),
+        "messages": [],
+        "initial_question": None,
+        "selected_suggestion": None,
+        "pending_approval": False,
+        "applying": False,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+            if key == "thread_id":
+                logger.debug("New session started")
 
-if "memory" not in st.session_state:
-    st.session_state.memory = MemorySaver()
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "initial_question" not in st.session_state:
-    st.session_state.initial_question = None
-if "selected_suggestion" not in st.session_state:
-    st.session_state.selected_suggestion = None
-if "pending_approval" not in st.session_state:
-    st.session_state.pending_approval = False
-if "applying" not in st.session_state:
-    st.session_state.applying = False
+_init_session_state()
 
 
 async def run_graph(inputs=None, resume=None, step_placeholder=None):
@@ -89,6 +90,7 @@ async def run_graph(inputs=None, resume=None, step_placeholder=None):
 
 
 def _assistant_content_from_state(state):
+    """Texto resumido para el mensaje del asistente a partir del state."""
     rationale = state.get("architect_rationale", "")
     plan_summary = state.get("plan_summary", "")
     secops_risk = state.get("secops_risk_analysis", "")
@@ -106,6 +108,46 @@ def _assistant_content_from_state(state):
             secops_parts.append("**Cambios requeridos:** " + "; ".join(secops_changes[:10]))
         parts.append("**SecOps:** " + " ".join(secops_parts))
     return "\n\n".join(parts) if parts else ""
+
+
+def _assistant_message_from_state(state, content_override=None):
+    """Construye el dict de mensaje del asistente para st.session_state.messages (evita duplicar en 3 sitios)."""
+    content = content_override if content_override is not None else _assistant_content_from_state(state)
+    if not content and not state.get("plan_output") and not state.get("apply_summary"):
+        return None
+    msg = {"role": "assistant", "content": content or ""}
+    if state.get("plan_output"):
+        msg["plan_summary"] = state.get("plan_summary", "")
+        msg["plan_output"] = state["plan_output"]
+    if state.get("secops_risk_analysis") or state.get("secops_required_changes"):
+        msg["secops_risk_analysis"] = state.get("secops_risk_analysis", "")
+        msg["secops_required_changes"] = state.get("secops_required_changes", [])
+    if state.get("apply_summary") is not None or state.get("apply_output") is not None:
+        msg["apply_summary"] = state.get("apply_summary", "")
+        msg["apply_output"] = state.get("apply_output", "") or ""
+        msg["apply_success"] = state.get("apply_success", True)
+    if state.get("rejected"):
+        msg["rejected"] = True
+    return msg
+
+
+def _render_tf_code(tf_code):
+    """Renderiza el bloque de código Terraform (dict o str/JSON) dentro del contexto actual."""
+    if isinstance(tf_code, dict):
+        for filename, file_content in tf_code.items():
+            st.subheader(f"`{filename}`")
+            st.code(file_content, language="hcl")
+    elif isinstance(tf_code, str):
+        try:
+            files_dict = json.loads(tf_code)
+            if isinstance(files_dict, dict):
+                for filename, file_content in files_dict.items():
+                    st.subheader(f"`{filename}`")
+                    st.code(file_content, language="hcl")
+            else:
+                st.code(tf_code, language="hcl")
+        except json.JSONDecodeError:
+            st.code(tf_code, language="hcl")
 
 
 st.html(div(style=styles(font_size=rem(5), line_height=1))["✈"])
@@ -219,15 +261,8 @@ for i, message in enumerate(messages):
                     st.session_state.applying = False
                     st.session_state.pending_approval = False
                     if interrupted:
-                        content = _assistant_content_from_state(final_state)
-                        if content:
-                            msg = {"role": "assistant", "content": content}
-                            if final_state.get("plan_output"):
-                                msg["plan_summary"] = final_state.get("plan_summary", "")
-                                msg["plan_output"] = final_state["plan_output"]
-                            if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
-                                msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
-                                msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
+                        msg = _assistant_message_from_state(final_state)
+                        if msg:
                             st.session_state.messages.append(msg)
                         st.session_state.pending_approval = True
                     else:
@@ -282,15 +317,8 @@ if user_message:
 
                 step_placeholder.empty()
                 if interrupted:
-                    content = _assistant_content_from_state(final_state)
-                    if content:
-                        msg = {"role": "assistant", "content": content}
-                        if final_state.get("plan_output"):
-                            msg["plan_summary"] = final_state.get("plan_summary", "")
-                            msg["plan_output"] = final_state["plan_output"]
-                        if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
-                            msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
-                            msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
+                    msg = _assistant_message_from_state(final_state)
+                    if msg:
                         st.session_state.messages.append(msg)
                     st.session_state.pending_approval = True
                     st.rerun()
@@ -317,21 +345,7 @@ if user_message:
                     tf_code = final_state.get("terraform_code", {})
                     if tf_code:
                         with st.expander("🛠️ Terraform Code", expanded=False):
-                            if isinstance(tf_code, dict):
-                                for filename, file_content in tf_code.items():
-                                    st.subheader(f"`{filename}`")
-                                    st.code(file_content, language="hcl")
-                            elif isinstance(tf_code, str):
-                                try:
-                                    files_dict = json.loads(tf_code)
-                                    if isinstance(files_dict, dict):
-                                        for filename, file_content in files_dict.items():
-                                            st.subheader(f"`{filename}`")
-                                            st.code(file_content, language="hcl")
-                                    else:
-                                        st.code(tf_code, language="hcl")
-                                except json.JSONDecodeError:
-                                    st.code(tf_code, language="hcl")
+                            _render_tf_code(tf_code)
 
                     plan_summary = final_state.get("plan_summary", "")
                     plan_output = final_state.get("plan_output", "")
@@ -348,17 +362,9 @@ if user_message:
                         with st.expander("Apply output (completo)", expanded=False):
                             st.code(apply_output, language="text")
 
-                    if content or plan_summary or apply_summary:
-                        msg = {"role": "assistant", "content": content or f"**Plan summary:** {plan_summary}\n\n**Apply summary:** {apply_summary}"}
-                        if plan_output:
-                            msg["plan_summary"] = plan_summary
-                            msg["plan_output"] = plan_output
-                        if apply_output:
-                            msg["apply_summary"] = apply_summary
-                            msg["apply_output"] = apply_output
-                        if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
-                            msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
-                            msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
+                    content_display = content or f"**Plan summary:** {plan_summary}\n\n**Apply summary:** {apply_summary}"
+                    msg = _assistant_message_from_state(final_state, content_override=content_display)
+                    if msg:
                         st.session_state.messages.append(msg)
 
             except Exception as e:

@@ -77,7 +77,7 @@ def finalize_secops_review_node(state: AgentState):
     required_changes = args.get("required_changes", [])
     
     if approved:
-        logger.debug(f"Security Review approved={approved}")
+        logger.info(f"Security Review approved={approved}")
     else:
         changes_preview = "; ".join(required_changes or [])
         logger.warning("Security Review rejected. Required changes: %s", changes_preview or "—")
