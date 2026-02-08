@@ -183,15 +183,15 @@ for i, message in enumerate(messages):
             if message.get("plan_output"):
                 with st.expander("Plan output (complete)", expanded=False):
                     st.code(message["plan_output"], language="text")
-            if message.get("apply_summary") or message.get("apply_output"):
-                st.markdown("Plan aplicado.")
+            if message.get("apply_success") or message.get("apply_summary") or message.get("apply_output"):
+                st.success("Plan applied successfully. Flow complete.")
                 if message.get("apply_summary"):
                     st.markdown(f"**Apply summary:** {message['apply_summary']}")
                 if message.get("apply_output"):
                     with st.expander("Apply output (complete)", expanded=False):
                         st.code(message["apply_output"], language="text")
             if message.get("rejected"):
-                st.markdown("Plan rechazado.")
+                st.warning("Plan rejected.")
             if message.get("secops_risk_analysis") or message.get("secops_required_changes"):
                 risk = message.get("secops_risk_analysis", "")
                 changes = message.get("secops_required_changes") or []
@@ -203,11 +203,17 @@ for i, message in enumerate(messages):
             if st.session_state.pending_approval and is_last:
                 type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
                 if st.session_state.get("applying"):
+                    decision = st.session_state.get("hitl_decision", "reject")
                     resume = {
-                        "type": st.session_state.get("hitl_decision", "reject"),
+                        "type": decision,
                         "feedback": st.session_state.get("hitl_feedback", ""),
                     }
-                    with st.spinner("Applying plan..."):
+                    spinner_msg = (
+                        "Applying plan..."
+                        if decision == "approve"
+                        else ("Processing requested changes..." if decision == "revise" else "Rejecting plan...")
+                    )
+                    with st.spinner(spinner_msg):
                         final_state, interrupted = asyncio.run(run_graph(resume=resume))
                     st.session_state.applying = False
                     st.session_state.pending_approval = False
@@ -228,6 +234,7 @@ for i, message in enumerate(messages):
                         if resume["type"] == "approve":
                             last["apply_summary"] = final_state.get("apply_summary", "")
                             last["apply_output"] = final_state.get("apply_output", "") or ""
+                            last["apply_success"] = final_state.get("apply_success", True)
                         else:
                             last["rejected"] = True
                     st.rerun()
@@ -237,10 +244,20 @@ for i, message in enumerate(messages):
                         feedback = st.text_area("Changes (optional)")
                         submitted = st.form_submit_button("Submit")
                     if submitted:
-                        st.session_state.applying = True
-                        st.session_state.hitl_decision = type_map[decision]
-                        st.session_state.hitl_feedback = feedback or ""
-                        st.rerun()
+                        if decision == "Request changes" and not (feedback or "").strip():
+                            st.error("Please describe the changes you want when requesting modifications.")
+                        else:
+                            requested_msg = (feedback.strip() or "Requested changes")
+                            hitl_content = (
+                                "Approved the plan"
+                                if decision == "Approve"
+                                else ("Rejected the plan" if decision == "Reject" else requested_msg)
+                            )
+                            st.session_state.messages.append({"role": "user", "content": hitl_content})
+                            st.session_state.applying = True
+                            st.session_state.hitl_decision = type_map[decision]
+                            st.session_state.hitl_feedback = feedback or ""
+                            st.rerun()
 
 if st.session_state.pending_approval:
     st.stop()

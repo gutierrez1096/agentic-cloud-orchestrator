@@ -56,6 +56,7 @@ def _plan_summary_from_json(workspace: str) -> str:
 
 def apply_to_workspace_node(state: AgentState):
     """Writes Terraform code to the workspace."""
+    logger.info("Node: apply_to_workspace — writing Terraform files to workspace")
     logger.debug("--- WRITING FILES TO WORKSPACE ---")
     tf_code = state.get("terraform_code", {})
     
@@ -74,6 +75,7 @@ def apply_to_workspace_node(state: AgentState):
             result = write_terraform_file.invoke({"content": content, "filename": filename})
             results.append(f"{filename}: {result}")
         logger.debug(f"Files written: {', '.join(results)}")
+        logger.info(f"Wrote {len(results)} Terraform file(s) to workspace")
     except Exception as e:
         logger.error(f"Error writing Terraform files: {e}")
     
@@ -82,6 +84,7 @@ def apply_to_workspace_node(state: AgentState):
 
 def terraform_init_node(state: AgentState):
     """Runs terraform init in the workspace."""
+    logger.info("Node: terraform_init — running init + validate")
     logger.debug("--- TERRAFORM INIT ---")
     errors = []
 
@@ -111,11 +114,13 @@ def terraform_init_node(state: AgentState):
         init_success = len(errors) == 0
         if not init_success:
             logger.error(f"Terraform init/validate failed: {errors}")
+            logger.info("Node: terraform_init — init/validate failed")
             return {
                 "init_success": False,
                 "workspace_errors": errors,
                 "from_debugger": False,
             }
+        logger.info("Node: terraform_init — init and validate OK")
         return {"init_success": True, "debugger_init_attempts": 0, "from_debugger": False}
     except Exception as e:
         logger.error(f"Error executing terraform init: {e}")
@@ -128,6 +133,7 @@ def terraform_init_node(state: AgentState):
 
 def terraform_plan_node(state: AgentState):
     """Runs terraform plan -out=tfplan and returns output + summary."""
+    logger.info("Node: terraform_plan — running plan -out=tfplan")
     logger.debug("--- TERRAFORM PLAN ---")
     try:
         plan_result = execute_terraform_command.invoke({
@@ -141,6 +147,7 @@ def terraform_plan_node(state: AgentState):
                 plan_output = plan_output.split(":\n", 1)[1]
         plan_success = _is_terraform_success(plan_result)
         plan_summary = _plan_summary_from_json(INFRA_WORKSPACE) if plan_success else ""
+        logger.info(f"Node: terraform_plan — {'OK' if plan_success else 'failed'}" + (f" ({plan_summary})" if plan_summary else ""))
         updates = {"plan_output": plan_output, "plan_summary": plan_summary or "", "plan_success": plan_success}
         if plan_success:
             updates["debugger_plan_attempts"] = 0
@@ -148,11 +155,13 @@ def terraform_plan_node(state: AgentState):
         return updates
     except Exception as e:
         logger.error(f"Error executing terraform plan: {e}")
+        logger.info("Node: terraform_plan — error during plan")
         return {"plan_output": f"Error executing terraform plan: {str(e)}", "plan_summary": "", "plan_success": False}
 
 
 def human_approval_node(state: AgentState):
     """Pauses the graph for human review of the terraform plan."""
+    logger.info("Node: human_approval — waiting for user decision (approve/revise/reject)")
     decision = interrupt({})
 
     decision_type = decision.get("type", "reject")
@@ -163,12 +172,16 @@ def human_approval_node(state: AgentState):
         updates["messages"] = [HumanMessage(
             content=f"[HUMAN REVIEW] The user rejected the plan and requested changes:\n\n{feedback}\n\nReview the architecture and generate a new TerraformDesign."
         )]
+        logger.info("Node: human_approval — user requested changes (revise)")
+    else:
+        logger.info(f"Node: human_approval — user decision: {decision_type}")
 
     return updates
 
 
 def terraform_apply_node(state: AgentState):
     """Runs terraform apply tfplan and returns output + summary (from plan)."""
+    logger.info("Node: terraform_apply — running apply -auto-approve tfplan")
     logger.debug("--- TERRAFORM APPLY ---")
     try:
         apply_result = execute_terraform_command.invoke({
@@ -184,10 +197,13 @@ def terraform_apply_node(state: AgentState):
         apply_summary = _apply_summary_from_output(apply_output, apply_success)
         if not apply_summary:
             apply_summary = state.get("plan_summary", "") or "Applied." if apply_success else "Apply failed."
+        short = (apply_summary or "")[:80] + ("..." if len(apply_summary or "") > 80 else "")
+        logger.info(f"Node: terraform_apply — {'OK' if apply_success else 'failed'}" + (f" — {short}" if short else ""))
         updates = {"apply_output": apply_output, "apply_summary": apply_summary, "apply_success": apply_success}
         if apply_success:
             updates["debugger_apply_attempts"] = 0
         return updates
     except Exception as e:
         logger.error(f"Error executing terraform apply: {e}")
+        logger.info("Node: terraform_apply — error during apply")
         return {"apply_output": f"Error executing terraform apply: {str(e)}", "apply_summary": str(e)[:200], "apply_success": False}
