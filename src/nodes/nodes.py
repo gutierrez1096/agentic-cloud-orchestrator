@@ -59,7 +59,6 @@ def apply_to_workspace_node(state: AgentState):
     logger.info("Node: apply_to_workspace — writing Terraform files to workspace")
     logger.debug("--- WRITING FILES TO WORKSPACE ---")
     tf_code = state.get("terraform_code", {})
-    
     if not tf_code:
         logger.error("No terraform_code found in state")
         return {"workspace_errors": ["No terraform_code found in state"]}

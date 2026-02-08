@@ -9,6 +9,23 @@ from src.config import INFRA_WORKSPACE, PROTECTED_TERRAFORM_FILES
 
 logger = logging.getLogger(__name__)
 
+
+def load_terraform_code_from_workspace(workspace: str = INFRA_WORKSPACE) -> dict:
+    """Lee todos los .tf del workspace y devuelve {filename: content}."""
+    out = {}
+    if not os.path.isdir(workspace):
+        return out
+    for name in os.listdir(workspace):
+        if name.endswith(".tf"):
+            path = os.path.join(workspace, name)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    out[name] = f.read()
+            except Exception as e:
+                logger.debug(f"Could not read {path}: {e}")
+    return out
+
+
 CHECKOV_PATH = shutil.which("checkov", path=os.path.dirname(sys.executable)) or shutil.which("checkov")
 
 TERRAFORM_PATH = shutil.which("tflocal", path=os.path.dirname(sys.executable)) or shutil.which("tflocal")

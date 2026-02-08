@@ -4,6 +4,7 @@ from typing import List, Any
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, HumanMessage
 
 from src.config import get_model
+from src.tools.custom_tools import load_terraform_code_from_workspace
 from src.prompts.debugger import IAC_DEBUGGER_SYSTEM_PROMPT
 from src.schemas.debugger_schemas import TerraformFix
 from src.states.graph_state import AgentState
@@ -87,9 +88,11 @@ def finalize_debugger_node(state: AgentState):
         return {"messages": [AIMessage(content="Error: No tool_call_id in tool_call.")]}
     args = tool_call.get("args", {})
     hcl_code = args.get("hcl_code", {})
+    if not hcl_code:
+        hcl_code = load_terraform_code_from_workspace()
     changes_summary = args.get("changes_summary", "")
     created = list(hcl_code.keys()) if hcl_code else []
-    logger.debug(f"Debugger fix - Files: {created}")
+    logger.info(f"Debugger fix - Files: {created}")
     content = f"Terraform fix applied. Files: {', '.join(created)}." + (
         f" Summary: {changes_summary}" if changes_summary else ""
     )

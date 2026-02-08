@@ -4,6 +4,7 @@ from typing import List, Any
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, HumanMessage
 
 from src.config import get_model
+from src.tools.custom_tools import load_terraform_code_from_workspace
 from src.prompts.architect import ARCHITECT_SYSTEM_PROMPT
 from src.schemas.architect_schemas import TerraformDesign
 from src.states.graph_state import AgentState
@@ -75,6 +76,8 @@ def finalize_architecture_node(state: AgentState):
     
     design_args = tool_call.get("args", {})
     hcl_code = design_args.get("hcl_code", {})
+    if not hcl_code:
+        hcl_code = load_terraform_code_from_workspace()
     rationale = design_args.get("rationale", "")
     
     created_files = list(hcl_code.keys()) if hcl_code else []

@@ -176,6 +176,7 @@ if not user_message:
         user_message = SUGGESTIONS[st.session_state.selected_suggestion]
 
 messages = st.session_state.messages
+last_assistant_idx = next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "assistant"), -1)
 for i, message in enumerate(messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -199,8 +200,8 @@ for i, message in enumerate(messages):
                 if changes:
                     txt += " **Cambios requeridos:** " + "; ".join(changes[:5])
                 st.markdown(txt)
-            is_last = i == len(messages) - 1
-            if st.session_state.pending_approval and is_last:
+            show_hitl = st.session_state.pending_approval and i == last_assistant_idx
+            if show_hitl:
                 type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
                 if st.session_state.get("applying"):
                     decision = st.session_state.get("hitl_decision", "reject")
@@ -230,7 +231,7 @@ for i, message in enumerate(messages):
                             st.session_state.messages.append(msg)
                         st.session_state.pending_approval = True
                     else:
-                        last = st.session_state.messages[-1]
+                        last = st.session_state.messages[last_assistant_idx]
                         if resume["type"] == "approve":
                             last["apply_summary"] = final_state.get("apply_summary", "")
                             last["apply_output"] = final_state.get("apply_output", "") or ""

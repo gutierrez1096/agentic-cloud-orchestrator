@@ -6,7 +6,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 load_dotenv()
 
-INFRA_WORKSPACE = "./infra_workspace"
+INFRA_WORKSPACE = os.getenv("INFRA_WORKSPACE", "./infra_workspace")
 PROTECTED_TERRAFORM_FILES = frozenset({"provider.tf", "localstack_providers_override.tf"})
 
 
