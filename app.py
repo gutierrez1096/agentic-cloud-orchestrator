@@ -58,10 +58,10 @@ RUN_STATE_RESET = {
     "human_decision": None,
     "plan_success": None,
     "apply_success": None,
-    "debugger_phase": None,
     "debugger_init_attempts": 0,
     "debugger_plan_attempts": 0,
     "debugger_apply_attempts": 0,
+    "debugger_tool_rounds": 0,
     "from_debugger": None,
 }
 
@@ -181,7 +181,7 @@ def _assistant_message_from_state(state, content_override=None):
         msg["apply_summary"] = state.get("apply_summary", "")
         msg["apply_output"] = state.get("apply_output", "") or ""
         msg["apply_success"] = state.get("apply_success", True)
-    if state.get("rejected"):
+    if state.get("human_decision") and state.get("human_decision") != "approve":
         msg["rejected"] = True
     return msg
 

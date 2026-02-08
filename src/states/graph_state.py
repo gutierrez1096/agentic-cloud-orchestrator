@@ -22,7 +22,6 @@ class AgentState(TypedDict):
     apply_output: NotRequired[str]
     plan_success: NotRequired[bool]
     apply_success: NotRequired[bool]
-    debugger_phase: NotRequired[Literal["init", "plan", "apply"]]
     debugger_init_attempts: NotRequired[int]
     debugger_plan_attempts: NotRequired[int]
     debugger_apply_attempts: NotRequired[int]

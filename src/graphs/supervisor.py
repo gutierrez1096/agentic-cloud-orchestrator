@@ -225,7 +225,6 @@ async def create_supervisor_graph(checkpointer=None):
         {
             "secops_tools": "secops_tools",
             "finalize_secops_review": "finalize_secops_review",
-            "secops_guardian": "secops_guardian",
             END: END
         }
     )
