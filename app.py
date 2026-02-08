@@ -91,11 +91,20 @@ async def run_graph(inputs=None, resume=None, step_placeholder=None):
 def _assistant_content_from_state(state):
     rationale = state.get("architect_rationale", "")
     plan_summary = state.get("plan_summary", "")
+    secops_risk = state.get("secops_risk_analysis", "")
+    secops_changes = state.get("secops_required_changes") or []
     parts = []
     if rationale:
         parts.append(f"### Architect Rationale\n\n{rationale}")
     if plan_summary:
         parts.append(f"**Plan summary:** {plan_summary}")
+    if secops_risk or secops_changes:
+        secops_parts = []
+        if secops_risk:
+            secops_parts.append(secops_risk[:500] + ("..." if len(secops_risk) > 500 else ""))
+        if secops_changes:
+            secops_parts.append("**Cambios requeridos:** " + "; ".join(secops_changes[:10]))
+        parts.append("**SecOps:** " + " ".join(secops_parts))
     return "\n\n".join(parts) if parts else ""
 
 
@@ -183,6 +192,13 @@ for i, message in enumerate(messages):
                         st.code(message["apply_output"], language="text")
             if message.get("rejected"):
                 st.markdown("Plan rechazado.")
+            if message.get("secops_risk_analysis") or message.get("secops_required_changes"):
+                risk = message.get("secops_risk_analysis", "")
+                changes = message.get("secops_required_changes") or []
+                txt = ("**SecOps:** " + (risk[:300] + "…" if len(risk) > 300 else risk))
+                if changes:
+                    txt += " **Cambios requeridos:** " + "; ".join(changes[:5])
+                st.markdown(txt)
             is_last = i == len(messages) - 1
             if st.session_state.pending_approval and is_last:
                 type_map = {"Approve": "approve", "Reject": "reject", "Request changes": "revise"}
@@ -202,6 +218,9 @@ for i, message in enumerate(messages):
                             if final_state.get("plan_output"):
                                 msg["plan_summary"] = final_state.get("plan_summary", "")
                                 msg["plan_output"] = final_state["plan_output"]
+                            if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
+                                msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
+                                msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
                             st.session_state.messages.append(msg)
                         st.session_state.pending_approval = True
                     else:
@@ -251,6 +270,9 @@ if user_message:
                         if final_state.get("plan_output"):
                             msg["plan_summary"] = final_state.get("plan_summary", "")
                             msg["plan_output"] = final_state["plan_output"]
+                        if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
+                            msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
+                            msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
                         st.session_state.messages.append(msg)
                     st.session_state.pending_approval = True
                     st.rerun()
@@ -316,6 +338,9 @@ if user_message:
                         if apply_output:
                             msg["apply_summary"] = apply_summary
                             msg["apply_output"] = apply_output
+                        if final_state.get("secops_risk_analysis") or final_state.get("secops_required_changes"):
+                            msg["secops_risk_analysis"] = final_state.get("secops_risk_analysis", "")
+                            msg["secops_required_changes"] = final_state.get("secops_required_changes", [])
                         st.session_state.messages.append(msg)
 
             except Exception as e:

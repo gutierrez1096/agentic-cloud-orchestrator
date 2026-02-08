@@ -64,28 +64,24 @@ def __wrap_search_aws_provider_docs(original_tool):
     )
 
 
-def __filter_terraform_tools_for_debugger(terraform_tools):
-    """Debugger gets Terraform MCP including ExecuteTerraformCommand; only block Terragrunt and Checkov."""
-    BLOCKED = {"RunCheckovScan", "ExecuteTerragruntCommand"}
-    return [t for t in terraform_tools if t.name not in BLOCKED]
-
-
-async def get_iac_debugger_tools():
-    """Terraform MCP tools for the IaC Debugger, including ExecuteTerraformCommand."""
-    terraform_tools = await terraform_client.get_tools()
-    return __filter_terraform_tools_for_debugger(terraform_tools)
+def __processed_terraform_tools(terraform_tools):
+    """Filter Terraform tools and wrap SearchAwsProviderDocs. Shared by architect and debugger."""
+    safe = __filter_terraform_tools(terraform_tools)
+    search_docs = next(t for t in safe if t.name == "SearchAwsProviderDocs")
+    others = [t for t in safe if t.name != "SearchAwsProviderDocs"]
+    return [__wrap_search_aws_provider_docs(search_docs)] + others
 
 
 async def get_solution_architect_tools():
     pricing_tools = await pricing_client.get_tools()
     terraform_tools = await terraform_client.get_tools()
-    safe_terraform_tools = __filter_terraform_tools(terraform_tools)
-    search_docs_tool = next((t for t in safe_terraform_tools if t.name == "SearchAwsProviderDocs"), None)
-    other_terraform_tools = [t for t in safe_terraform_tools if t.name != "SearchAwsProviderDocs"]
-    if search_docs_tool is None:
-        return pricing_tools + safe_terraform_tools
-    wrapped_search_docs = __wrap_search_aws_provider_docs(search_docs_tool)
-    return pricing_tools + [wrapped_search_docs] + other_terraform_tools
+    return pricing_tools + __processed_terraform_tools(terraform_tools)
+
+
+async def get_iac_debugger_tools():
+    """Same Terraform tools as architect, without pricing."""
+    terraform_tools = await terraform_client.get_tools()
+    return __processed_terraform_tools(terraform_tools)
 
 
 async def get_secops_guardian_tools():

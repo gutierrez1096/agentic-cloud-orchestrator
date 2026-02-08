@@ -11,7 +11,7 @@ class TerraformFix(BaseModel):
     """
     hcl_code: Dict[str, str] = Field(
         ...,
-        description="Dictionary of Terraform files. Keys are filenames (e.g. 'main.tf', 'variables.tf', 'outputs.tf') and values are the corrected HCL content for each file."
+        description="Dictionary of Terraform files. Keys are filenames (e.g. 'main.tf', 'variables.tf', 'outputs.tf') and values are the full, complete HCL content for each file (not a diff or partial change)."
     )
     changes_summary: str = Field(
         default="",
