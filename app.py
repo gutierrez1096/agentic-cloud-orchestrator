@@ -40,8 +40,33 @@ NODE_LABELS = {
     "debugger_tools": "Correcting Terraform errors",
 }
 
+# Reset de estado al iniciar una nueva instrucción del usuario (no se toca el grafo).
+RUN_STATE_RESET = {
+    "terraform_code": None,
+    "plan_output": None,
+    "plan_summary": None,
+    "apply_summary": None,
+    "apply_output": None,
+    "is_approved": None,
+    "workspace_errors": None,
+    "architect_rationale": None,
+    "created_files": None,
+    "review_iterations": 0,
+    "secops_required_changes": None,
+    "secops_risk_analysis": None,
+    "init_success": None,
+    "human_decision": None,
+    "plan_success": None,
+    "apply_success": None,
+    "debugger_phase": None,
+    "debugger_init_attempts": 0,
+    "debugger_plan_attempts": 0,
+    "debugger_apply_attempts": 0,
+    "from_debugger": None,
+}
+
 def _init_session_state():
-    """Inicializa todas las claves de session_state en un solo lugar (recomendado por Streamlit)."""
+    """Initialize all session_state keys in one place (recommended by Streamlit)."""
     defaults = {
         "thread_id": str(uuid.uuid4()),
         "memory": MemorySaver(),
@@ -73,10 +98,15 @@ async def run_graph(inputs=None, resume=None, step_placeholder=None):
     }
     inp = Command(resume=resume) if resume else inputs
     if step_placeholder is not None:
+        steps_trail = []
         async for event in graph.astream(inp, config, stream_mode="updates"):
             for node_name in event:
                 label = NODE_LABELS.get(node_name, node_name)
-                step_placeholder.markdown(f"**Step:** {label}")
+                if not steps_trail or steps_trail[-1] != label:
+                    steps_trail.append(label)
+                steps_trail = steps_trail[-5:]
+                lines = [f"- {s}" for s in steps_trail[:-1]] + [f"- *{steps_trail[-1]}*"]
+                step_placeholder.markdown("**Steps:**\n" + "\n".join(lines))
         snapshot = await graph.aget_state(config)
         result = snapshot.values if snapshot else None
         interrupted = bool(snapshot.interrupts) if snapshot else False
@@ -89,8 +119,33 @@ async def run_graph(inputs=None, resume=None, step_placeholder=None):
     return result, interrupted
 
 
+def _flow_summary_bullets(state):
+    """Short list of flow steps and decisions (transparency without overwhelming)."""
+    bullets = []
+    if state.get("created_files"):
+        bullets.append("Design and Terraform files generated")
+    if state.get("is_approved") is True:
+        bullets.append("SecOps approved")
+    elif state.get("secops_required_changes"):
+        bullets.append("SecOps requested changes")
+    if state.get("init_success") is False:
+        bullets.append("Terraform init failed (fixed by debugger)")
+    if state.get("plan_success") is True:
+        bullets.append("Plan generated")
+    elif state.get("plan_success") is False:
+        bullets.append("Plan failed")
+    decision = state.get("human_decision")
+    if decision == "approve":
+        bullets.append("Plan applied successfully" if state.get("apply_success") else "Apply failed")
+    elif decision == "reject":
+        bullets.append("Plan rejected")
+    if state.get("plan_success") and not decision and not state.get("apply_output"):
+        bullets.append("Waiting for your approval")
+    return bullets
+
+
 def _assistant_content_from_state(state):
-    """Texto resumido para el mensaje del asistente a partir del state."""
+    """Summary text for the assistant message from state."""
     rationale = state.get("architect_rationale", "")
     plan_summary = state.get("plan_summary", "")
     secops_risk = state.get("secops_risk_analysis", "")
@@ -105,13 +160,13 @@ def _assistant_content_from_state(state):
         if secops_risk:
             secops_parts.append(secops_risk[:500] + ("..." if len(secops_risk) > 500 else ""))
         if secops_changes:
-            secops_parts.append("**Cambios requeridos:** " + "; ".join(secops_changes[:10]))
+            secops_parts.append("**Required changes:** " + "; ".join(secops_changes[:10]))
         parts.append("**SecOps:** " + " ".join(secops_parts))
     return "\n\n".join(parts) if parts else ""
 
 
 def _assistant_message_from_state(state, content_override=None):
-    """Construye el dict de mensaje del asistente para st.session_state.messages (evita duplicar en 3 sitios)."""
+    """Build the assistant message dict for st.session_state.messages (avoids duplicating in 3 places)."""
     content = content_override if content_override is not None else _assistant_content_from_state(state)
     if not content and not state.get("plan_output") and not state.get("apply_summary"):
         return None
@@ -132,7 +187,7 @@ def _assistant_message_from_state(state, content_override=None):
 
 
 def _render_tf_code(tf_code):
-    """Renderiza el bloque de código Terraform (dict o str/JSON) dentro del contexto actual."""
+    """Render the Terraform code block (dict or str/JSON) within the current context."""
     if isinstance(tf_code, dict):
         for filename, file_content in tf_code.items():
             st.subheader(f"`{filename}`")
@@ -223,6 +278,10 @@ for i, message in enumerate(messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         if message.get("role") == "assistant":
+            if message.get("flow_bullets"):
+                st.markdown("**Flow summary**")
+                for b in message["flow_bullets"]:
+                    st.markdown(f"- {b}")
             if message.get("plan_output"):
                 with st.expander("Plan output (complete)", expanded=False):
                     st.code(message["plan_output"], language="text")
@@ -240,7 +299,7 @@ for i, message in enumerate(messages):
                 changes = message.get("secops_required_changes") or []
                 txt = ("**SecOps:** " + (risk[:300] + "…" if len(risk) > 300 else risk))
                 if changes:
-                    txt += " **Cambios requeridos:** " + "; ".join(changes[:5])
+                    txt += " **Required changes:** " + "; ".join(changes[:5])
                 st.markdown(txt)
             show_hitl = st.session_state.pending_approval and i == last_assistant_idx
             if show_hitl:
@@ -273,6 +332,7 @@ for i, message in enumerate(messages):
                             last["apply_success"] = final_state.get("apply_success", True)
                         else:
                             last["rejected"] = True
+                        last["flow_bullets"] = _flow_summary_bullets(final_state)
                     st.rerun()
                 else:
                     with st.form("hitl"):
@@ -283,13 +343,6 @@ for i, message in enumerate(messages):
                         if decision == "Request changes" and not (feedback or "").strip():
                             st.error("Please describe the changes you want when requesting modifications.")
                         else:
-                            requested_msg = (feedback.strip() or "Requested changes")
-                            hitl_content = (
-                                "Approved the plan"
-                                if decision == "Approve"
-                                else ("Rejected the plan" if decision == "Reject" else requested_msg)
-                            )
-                            st.session_state.messages.append({"role": "user", "content": hitl_content})
                             st.session_state.applying = True
                             st.session_state.hitl_decision = type_map[decision]
                             st.session_state.hitl_feedback = feedback or ""
@@ -309,8 +362,10 @@ if user_message:
     with st.chat_message("assistant"):
         step_placeholder = st.empty()
         with st.spinner("Architecting..."):
-            config = {"configurable": {"thread_id": st.session_state.thread_id}}
-            inputs = {"messages": [SystemMessage(content=ARCHITECT_SYSTEM_PROMPT), HumanMessage(content=user_message)]}
+            inputs = {
+                "messages": [SystemMessage(content=ARCHITECT_SYSTEM_PROMPT), HumanMessage(content=user_message)],
+                **RUN_STATE_RESET,
+            }
 
             try:
                 final_state, interrupted = asyncio.run(run_graph(inputs=inputs, step_placeholder=step_placeholder))
@@ -319,6 +374,7 @@ if user_message:
                 if interrupted:
                     msg = _assistant_message_from_state(final_state)
                     if msg:
+                        msg["flow_bullets"] = _flow_summary_bullets(final_state)
                         st.session_state.messages.append(msg)
                     st.session_state.pending_approval = True
                     st.rerun()
@@ -330,6 +386,12 @@ if user_message:
                         content = last_msg.content or ""
                     if content:
                         st.markdown(content)
+
+                    flow_bullets = _flow_summary_bullets(final_state)
+                    if flow_bullets:
+                        st.markdown("**Flow summary**")
+                        for b in flow_bullets:
+                            st.markdown(f"- {b}")
 
                     rationale = final_state.get("architect_rationale", "")
                     if rationale:
@@ -354,17 +416,18 @@ if user_message:
                     if plan_summary:
                         st.markdown(f"**Plan summary:** {plan_summary}")
                     if plan_output:
-                        with st.expander("Plan output (completo)", expanded=False):
+                        with st.expander("Plan output (complete)", expanded=False):
                             st.code(plan_output, language="text")
                     if apply_summary:
                         st.markdown(f"**Apply summary:** {apply_summary}")
                     if apply_output:
-                        with st.expander("Apply output (completo)", expanded=False):
+                        with st.expander("Apply output (complete)", expanded=False):
                             st.code(apply_output, language="text")
 
                     content_display = content or f"**Plan summary:** {plan_summary}\n\n**Apply summary:** {apply_summary}"
                     msg = _assistant_message_from_state(final_state, content_override=content_display)
                     if msg:
+                        msg["flow_bullets"] = flow_bullets
                         st.session_state.messages.append(msg)
 
             except Exception as e:
