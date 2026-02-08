@@ -114,13 +114,15 @@ def terraform_init_node(state: AgentState):
             return {
                 "init_success": False,
                 "workspace_errors": errors,
+                "from_debugger": False,
             }
-        return {"init_success": True, "debugger_init_attempts": 0}
+        return {"init_success": True, "debugger_init_attempts": 0, "from_debugger": False}
     except Exception as e:
         logger.error(f"Error executing terraform init: {e}")
         return {
             "init_success": False,
             "workspace_errors": state.get("workspace_errors", []) + [str(e)],
+            "from_debugger": False,
         }
 
 

@@ -82,8 +82,8 @@ def __after_security_review_router(state):
     
     iterations = state.get("review_iterations", 0)
     if iterations >= MAX_REVIEW_ITERATIONS:
-        logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform plan.")
-        return "terraform_plan"
+        logger.warning(f"Max review iterations ({iterations}) reached. Proceeding to terraform init.")
+        return "terraform_init"
     
     logger.warning(f"Security rejected (iteration {iterations}/{MAX_REVIEW_ITERATIONS}). Returning to architect.")
     return "solution_architect"
@@ -122,6 +122,15 @@ def __debugger_router(state):
         mapping={"TerraformFix": "finalize_debugger"},
         default="debugger_tools",
     )
+
+
+def __after_apply_to_workspace_router(state):
+    """Router after apply_to_workspace: if from_debugger → terraform_init (re-run pipeline); else → secops_guardian."""
+    if state.get("from_debugger"):
+        logger.debug("Coming from debugger fix. Re-running terraform init → plan → apply.")
+        return "terraform_init"
+    logger.debug("New design written. Proceeding to SecOps guardian.")
+    return "secops_guardian"
 
 
 def __after_human_approval_router(state):
@@ -177,8 +186,15 @@ async def create_supervisor_graph(checkpointer=None):
     
     builder.add_edge("architect_tools", "solution_architect")
     builder.add_edge("finalize_architecture", "apply_to_workspace")
-    # Shift-Left: SecOps validates via MCP (Checkov) before any Terraform binary is used
-    builder.add_edge("apply_to_workspace", "secops_guardian")
+    # After writing: from debugger fix → re-run init/plan/apply; from new design → SecOps
+    builder.add_conditional_edges(
+        "apply_to_workspace",
+        __after_apply_to_workspace_router,
+        {
+            "terraform_init": "terraform_init",
+            "secops_guardian": "secops_guardian",
+        }
+    )
 
     builder.add_conditional_edges(
         "terraform_init",

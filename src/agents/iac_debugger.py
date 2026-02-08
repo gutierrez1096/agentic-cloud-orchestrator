@@ -102,4 +102,5 @@ def finalize_debugger_node(state: AgentState):
         "terraform_code": hcl_code,
         "workspace_errors": [],
         "messages": [tool_message],
+        "from_debugger": True,
     }
