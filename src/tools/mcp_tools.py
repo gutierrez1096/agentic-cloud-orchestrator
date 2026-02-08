@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 
 from langchain_core.tools import StructuredTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -8,8 +9,10 @@ from src.tools.custom_tools import run_checkov_scan
 
 logger = logging.getLogger(__name__)
 
-SEARCH_AWS_DOCS_MAX_CHARS = 4000
+SEARCH_AWS_DOCS_MAX_CHARS = int(os.getenv("SEARCH_AWS_DOCS_MAX_CHARS", "4000"))
 TRUNCATION_SUFFIX = "\n\n[Documentation truncated to reduce context size.]"
+
+AWS_REGION = os.getenv("AWS_REGION", "eu-central-1")
 
 MCP_CONFIG = {
     "aws-terraform": {
@@ -17,7 +20,7 @@ MCP_CONFIG = {
         "command": "uvx",
         "args": ["awslabs.terraform-mcp-server@latest"],
         "env": {
-            "AWS_REGION": "eu-central-1",
+            "AWS_REGION": AWS_REGION,
             "FASTMCP_LOG_LEVEL": "ERROR",
         }
     },
@@ -26,7 +29,7 @@ MCP_CONFIG = {
         "command": "uvx",
         "args": ["awslabs.aws-pricing-mcp-server@latest"],
         "env": {
-            "AWS_REGION": "eu-central-1",
+            "AWS_REGION": AWS_REGION,
         }
     }
 }

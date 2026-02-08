@@ -26,4 +26,5 @@ class AgentState(TypedDict):
     debugger_init_attempts: NotRequired[int]
     debugger_plan_attempts: NotRequired[int]
     debugger_apply_attempts: NotRequired[int]
+    debugger_tool_rounds: NotRequired[int]
     from_debugger: NotRequired[bool]

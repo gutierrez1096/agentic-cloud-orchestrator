@@ -1,4 +1,5 @@
 import logging
+import os
 
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
@@ -21,8 +22,9 @@ from src.nodes.nodes import (
 
 logger = logging.getLogger(__name__)
 
-MAX_REVIEW_ITERATIONS = 3
-MAX_DEBUGGER_ATTEMPTS = 2
+MAX_REVIEW_ITERATIONS = int(os.getenv("MAX_REVIEW_ITERATIONS", "5"))
+MAX_DEBUGGER_ATTEMPTS = int(os.getenv("MAX_DEBUGGER_ATTEMPTS", "5"))
+MAX_DEBUGGER_TOOL_ROUNDS = int(os.getenv("MAX_DEBUGGER_TOOL_ROUNDS", "3"))
 
 
 def _route_by_tool(state, mapping, default=END):
@@ -116,12 +118,18 @@ def __after_apply_router(state):
 
 
 def __debugger_router(state):
-    """Router after iac_debugger: TerraformFix → finalize_debugger; other tool → debugger_tools."""
-    return _route_by_tool(
-        state,
-        mapping={"TerraformFix": "finalize_debugger"},
-        default="debugger_tools",
-    )
+    """Router after iac_debugger: TerraformFix → finalize_debugger; other tool → debugger_tools (max rounds)."""
+    tool_name = None
+    messages = state.get("messages", [])
+    if messages and hasattr(messages[-1], "tool_calls") and messages[-1].tool_calls:
+        tool_name = messages[-1].tool_calls[0]["name"]
+    if tool_name == "TerraformFix":
+        return "finalize_debugger"
+    rounds = state.get("debugger_tool_rounds", 0)
+    if rounds >= MAX_DEBUGGER_TOOL_ROUNDS:
+        logger.warning("Max debugger tool rounds (%s) reached. Returning to solution_architect.", MAX_DEBUGGER_TOOL_ROUNDS)
+        return "solution_architect"
+    return "debugger_tools"
 
 
 def __after_apply_to_workspace_router(state):
@@ -169,7 +177,12 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_node("human_approval", human_approval_node)
     builder.add_node("terraform_apply", terraform_apply_node)
     builder.add_node("iac_debugger", partial(iac_debugger_node, tools=debugger_tools))
-    builder.add_node("debugger_tools", debugger_tool_node)
+
+    def debugger_tools_with_rounds(state):
+        result = debugger_tool_node.invoke(state)
+        return {**result, "debugger_tool_rounds": state.get("debugger_tool_rounds", 0) + 1}
+
+    builder.add_node("debugger_tools", debugger_tools_with_rounds)
     builder.add_node("finalize_debugger", finalize_debugger_node)
 
     builder.set_entry_point("solution_architect")
@@ -260,6 +273,7 @@ async def create_supervisor_graph(checkpointer=None):
         {
             "finalize_debugger": "finalize_debugger",
             "debugger_tools": "debugger_tools",
+            "solution_architect": "solution_architect",
             END: END,
         }
     )

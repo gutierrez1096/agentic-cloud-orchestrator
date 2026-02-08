@@ -68,7 +68,11 @@ async def iac_debugger_node(state: AgentState, tools: List[Any]):
     else:
         logger.debug("Debugger generated direct response")
 
-    return {"messages": [response], **{counter_key: counter_value}}
+    out = {"messages": [response], **{counter_key: counter_value}}
+    messages = state.get("messages", [])
+    if not (messages and isinstance(messages[-1], ToolMessage)):
+        out["debugger_tool_rounds"] = 0
+    return out
 
 
 def finalize_debugger_node(state: AgentState):
