@@ -16,8 +16,6 @@ import json
 load_dotenv()
 logger = setup_logger()
 
-langfuse_handler = CallbackHandler()
-
 st.set_page_config(page_title="AWS IaC Agent", page_icon="🏗️", layout="centered")
 
 SUGGESTIONS = {
@@ -65,9 +63,11 @@ if "applying" not in st.session_state:
 async def run_graph(inputs=None, resume=None, step_placeholder=None):
     """Runs the graph (inputs) or resumes after interrupt (resume). Returns (state, interrupted)."""
     graph = await create_supervisor_graph(checkpointer=st.session_state.memory)
+    langfuse_handler = CallbackHandler(session_id=st.session_state.thread_id)
     config = {
         "configurable": {"thread_id": st.session_state.thread_id},
         "callbacks": [langfuse_handler],
+        "run_name": "AWS IaC Agent",
     }
     inp = Command(resume=resume) if resume else inputs
     if step_placeholder is not None:

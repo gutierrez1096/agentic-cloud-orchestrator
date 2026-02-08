@@ -62,10 +62,10 @@ def __secops_router(state):
 
 
 def __after_init_router(state):
-    """Router after terraform init: if OK → secops; if failed and under max debugger attempts → iac_debugger; else → solution_architect."""
+    """Router after terraform init: if OK → terraform_plan; if failed and under max debugger attempts → iac_debugger; else → solution_architect."""
     if state.get("init_success", True):
-        logger.debug("Terraform init OK. Proceeding to secops_guardian.")
-        return "secops_guardian"
+        logger.debug("Terraform init OK. Proceeding to terraform_plan.")
+        return "terraform_plan"
     attempts = state.get("debugger_init_attempts", 0)
     if attempts >= MAX_DEBUGGER_ATTEMPTS:
         logger.warning("Terraform init failed; max debugger attempts reached. Returning to solution_architect.")
@@ -75,10 +75,10 @@ def __after_init_router(state):
 
 
 def __after_security_review_router(state):
-    """Router after processing SecurityReview."""
+    """Router after processing SecurityReview. Shift-Left: only after SecOps approval we touch Terraform binary."""
     if state.get("is_approved"):
-        logger.debug("Security approved. Proceeding to terraform plan.")
-        return "terraform_plan"
+        logger.debug("Security approved. Proceeding to terraform init (first use of Terraform binary).")
+        return "terraform_init"
     
     iterations = state.get("review_iterations", 0)
     if iterations >= MAX_REVIEW_ITERATIONS:
@@ -177,13 +177,14 @@ async def create_supervisor_graph(checkpointer=None):
     
     builder.add_edge("architect_tools", "solution_architect")
     builder.add_edge("finalize_architecture", "apply_to_workspace")
-    builder.add_edge("apply_to_workspace", "terraform_init")
+    # Shift-Left: SecOps validates via MCP (Checkov) before any Terraform binary is used
+    builder.add_edge("apply_to_workspace", "secops_guardian")
 
     builder.add_conditional_edges(
         "terraform_init",
         __after_init_router,
         {
-            "secops_guardian": "secops_guardian",
+            "terraform_plan": "terraform_plan",
             "solution_architect": "solution_architect",
             "iac_debugger": "iac_debugger",
         }
@@ -206,7 +207,7 @@ async def create_supervisor_graph(checkpointer=None):
         "finalize_secops_review",
         __after_security_review_router,
         {
-            "terraform_plan": "terraform_plan",
+            "terraform_init": "terraform_init",
             "solution_architect": "solution_architect",
         }
     )
