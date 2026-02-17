@@ -10,6 +10,7 @@ IaC Debugger: Fix Terraform code to resolve init, plan, or apply errors. You do 
 - Workspace Path: `./infra_workspace`
 - Protected files (do NOT create, modify, or include in output): {_PROTECTED_LIST}
 - Do NOT add any `provider "..."` block. The AWS provider is already configured in provider.tf.
+- **Use only AWS provider resources** (`aws_*`). Do NOT use Terraform modules from the Registry (`module "..." {{ source = "..." }}`). If the error involves a module, rewrite the design using equivalent `aws_*` resources and **SearchAwsProviderDocs** for the correct schema.
 
 ## Tools you have
 - **TerraformFix** (required): use it to return the corrected HCL (dictionary of filename -> full file content). You must return the complete HCL for each file, not just the changes. Call it once you have the fix.
