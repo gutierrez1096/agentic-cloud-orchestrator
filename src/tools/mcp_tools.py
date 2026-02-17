@@ -44,7 +44,14 @@ for tool in asyncio.run(terraform_client.get_tools()):
 
 
 def __filter_terraform_tools(terraform_tools):
-    BLOCKED = {"ExecuteTerraformCommand", "execute_terraform_command", "RunCheckovScan", "ExecuteTerragruntCommand"}
+    BLOCKED = {
+        "ExecuteTerraformCommand",
+        "execute_terraform_command",
+        "RunCheckovScan",
+        "ExecuteTerragruntCommand",
+        "write_terraform_file",
+        "WriteTerraformFile",
+    }
     return [t for t in terraform_tools if t.name not in BLOCKED]
 
 
