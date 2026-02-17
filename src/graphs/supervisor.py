@@ -178,8 +178,8 @@ async def create_supervisor_graph(checkpointer=None):
     builder.add_node("terraform_apply", terraform_apply_node)
     builder.add_node("iac_debugger", partial(iac_debugger_node, tools=debugger_tools))
 
-    def debugger_tools_with_rounds(state):
-        result = debugger_tool_node.invoke(state)
+    async def debugger_tools_with_rounds(state):
+        result = await debugger_tool_node.ainvoke(state)
         return {**result, "debugger_tool_rounds": state.get("debugger_tool_rounds", 0) + 1}
 
     builder.add_node("debugger_tools", debugger_tools_with_rounds)

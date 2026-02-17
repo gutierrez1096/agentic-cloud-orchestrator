@@ -20,9 +20,8 @@ st.set_page_config(page_title="AWS IaC Agent", page_icon="🏗️", layout="cent
 
 SUGGESTIONS = {
     "☁️ Log Bucket": "I need an S3 bucket for storing application logs.",
-    "🖥️ Web Server": "Deploy an EC2 instance t3.micro for a web server.",
-    "🗄️ RDS Database": "Create a PostgreSQL RDS instance in a private subnet.",
-    "🛡️ VPC Setup": "Architect a VPC with public and private subnets.",
+    "🖥️ Web API": "Deploy a serverless web API using API Gateway and Lambda.",
+    "🔌 Serverless REST API": "Deploy a serverless REST API in eu-central-1 using API Gateway and Lambda with a DynamoDB table as backend for CRUD operations, following AWS security best practices."
 }
 
 NODE_LABELS = {
