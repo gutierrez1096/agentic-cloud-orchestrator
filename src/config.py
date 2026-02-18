@@ -9,7 +9,7 @@ load_dotenv()
 INFRA_WORKSPACE = os.getenv("INFRA_WORKSPACE", "./infra_workspace")
 PROTECTED_TERRAFORM_FILES = frozenset({"provider.tf", "localstack_providers_override.tf"})
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5.1")
 MODEL_TIMEOUT = int(os.getenv("MODEL_TIMEOUT", "60"))
 
 

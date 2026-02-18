@@ -20,7 +20,8 @@ st.set_page_config(page_title="AWS IaC Agent", page_icon="🏗️", layout="cent
 
 SUGGESTIONS = {
     "☁️ Log Bucket": "I need an S3 bucket for storing application logs.",
-    "📩 Async Messaging": "Setup an SNS topic for order notifications and an SQS queue subscribed to it to handle background processing."
+    "📩 Async Messaging": "Setup an SNS topic for order notifications and an SQS queue subscribed to it to handle background processing.",
+    "🗄️ NoSQL Table": "Create a DynamoDB table for user profiles using 'UserId' as the partition key and a Global Secondary Index (GSI) to allow efficient queries by 'Email'."
     }
 
 NODE_LABELS = {
