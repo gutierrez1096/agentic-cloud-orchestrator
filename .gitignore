@@ -63,3 +63,6 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+infra_workspace/*
+!infra_workspace/provider.tf

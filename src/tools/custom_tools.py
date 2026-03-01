@@ -1,0 +1,106 @@
+import os
+import sys
+import subprocess
+import shutil
+import logging
+from langchain_core.tools import tool
+
+from src.config import INFRA_WORKSPACE, PROTECTED_TERRAFORM_FILES
+
+logger = logging.getLogger(__name__)
+
+
+def load_terraform_code_from_workspace(workspace: str = INFRA_WORKSPACE) -> dict:
+    """Lee todos los .tf del workspace y devuelve {filename: content}."""
+    out = {}
+    if not os.path.isdir(workspace):
+        return out
+    for name in os.listdir(workspace):
+        if name.endswith(".tf"):
+            path = os.path.join(workspace, name)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    out[name] = f.read()
+            except Exception as e:
+                logger.debug(f"Could not read {path}: {e}")
+    return out
+
+
+CHECKOV_PATH = shutil.which("checkov", path=os.path.dirname(sys.executable)) or shutil.which("checkov")
+
+TERRAFORM_PATH = shutil.which("tflocal", path=os.path.dirname(sys.executable)) or shutil.which("tflocal")
+
+@tool
+def write_terraform_file(content: str, filename: str = "main.tf") -> str:
+    """Writes Terraform HCL code to the infrastructure workspace."""
+    if filename in PROTECTED_TERRAFORM_FILES:
+        logger.warning(f"Attempted to write to protected file: {filename}")
+        return f"Error: '{filename}' is a protected file and cannot be modified. This file contains critical infrastructure configuration."
+    
+    os.makedirs(INFRA_WORKSPACE, exist_ok=True)
+    file_path = os.path.join(INFRA_WORKSPACE, filename)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    logger.debug(f"Wrote Terraform file: {file_path}")
+    return f"Successfully wrote infrastructure code to {file_path}"
+
+
+@tool
+def execute_terraform_command(command: str, working_directory: str = INFRA_WORKSPACE) -> str:
+    """Execute a Terraform command using tflocal."""
+
+    if not os.path.exists(working_directory):
+        return f"Error: Working directory does not exist: {working_directory}"
+
+    logger.debug(f"Terraform path: {TERRAFORM_PATH}")
+    
+    normalized_command = command.replace("terraform ", "").strip()
+    full_command = [TERRAFORM_PATH] + normalized_command.split()
+
+    logger.debug(f"Executing Terraform command: {full_command}")
+    
+    try:
+        result = subprocess.run(
+            full_command,
+            cwd=working_directory,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+            check=False
+        )
+        output = "\n".join([result.stdout or "", result.stderr or ""]).strip()
+        # Normalize Terraform's box-drawing line (─) to ASCII so it displays everywhere
+        output = output.replace("\u2500", "-")
+        status = "Success" if result.returncode == 0 else f"Exit code: {result.returncode}"
+        return f"Terraform command execution ({status}):\n{output}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool(
+    "RunCheckovScan"
+)
+def run_checkov_scan(working_directory: str = INFRA_WORKSPACE, framework: str = "terraform") -> str:
+    """Run Checkov security scan on Terraform code to identify vulnerabilities and misconfigurations."""
+    
+    if not os.path.exists(working_directory):
+        return f"Error: Working directory does not exist: {working_directory}"
+
+    try:
+        result = subprocess.run(
+            [CHECKOV_PATH, "-d", working_directory, "--framework", framework,"--quiet", "--compact", "--skip-check", "MEDIUM"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        output = result.stdout.strip() or result.stderr.strip()
+        logger.debug("Checkov executed successfully")
+        logger.debug(f"Checkov output: {output}")
+        if not output:
+            return "Checkov executed but produced no output (exit code: {}).".format(result.returncode)
+        return output
+    except Exception as e:
+        return f"Error running checkov: {e}"

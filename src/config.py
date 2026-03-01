@@ -6,20 +6,27 @@ from langgraph.checkpoint.memory import MemorySaver
 
 load_dotenv()
 
+INFRA_WORKSPACE = os.getenv("INFRA_WORKSPACE", "./infra_workspace")
+PROTECTED_TERRAFORM_FILES = frozenset({"provider.tf", "localstack_providers_override.tf"})
 
-def get_model(model_name: str = "gpt-4.1", timeout: int = 60):
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-5.1")
+MODEL_TIMEOUT = int(os.getenv("MODEL_TIMEOUT", "60"))
+
+
+def get_model(model_name: str | None = None, timeout: int | None = None):
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY no está definido. Configúralo en el entorno o en un fichero .env."
+            "OPENAI_API_KEY is not set. Configure it in the environment or in a .env file."
         )
 
+
     model = ChatOpenAI(
-            model=model_name,
+            model=model_name or MODEL_NAME,
             temperature=0,
             max_tokens=None,
-            timeout=timeout
+            timeout=timeout or MODEL_TIMEOUT
         )
 
     return model

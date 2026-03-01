@@ -1,0 +1,14 @@
+# LocalStack para desarrollo local (AWS emulado).
+# Terraform usa http://localhost:4566 para los endpoints.
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sns,sqs,dynamodb,lambda,iam,sts,cloudformation,apigateway,ec2
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+volumes:
+  localstack_data:
