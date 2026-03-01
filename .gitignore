@@ -66,5 +66,3 @@ dmypy.json
 
 infra_workspace/*
 !infra_workspace/provider.tf
-
-localstack/
